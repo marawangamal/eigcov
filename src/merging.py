@@ -177,6 +177,96 @@ def merge_regmean(
 
 
 # ************************** Eigenvalue Covariance (EigCov) **************************
-def merge_eigcov(d: torch.Tensor, **kwargs):
+def _get_eigcov(d: torch.Tensor, *args, **kwargs):
     c = d.transpose(1, 2) @ d
+    return c
+
+
+def merge_eigcov(d: torch.Tensor, *args, **kwargs):
+    # c = d.transpose(1, 2) @ d
+    c = _get_eigcov(d)
     return (d @ c).sum(dim=0) @ pinv(c.sum(dim=0))
+
+
+# ************************* Projected RegMean **************************
+
+
+def _loss_prm(w_star, q, w, c):
+    """Compute projected regmean loss.
+
+    .. math::
+        sum_t Tr[(w_star - q_t w_t) c (w_star - q_t w_t)^T]
+
+    Args:
+        w_star: (Do, Di) - consensus matrix
+        q: (N, Do, Do) - orthogonal matrices
+        w: (N, Do, Di) - input matrices
+        c: (N, Di, Di) - covariance matrix
+
+    Returns:
+        loss: scalar - sum_t tr[(w_star - q_t w_t) sigma (w_star - q_t w_t)^T]
+    """
+    residuals = w_star.unsqueeze(0) - q @ w  # (N, Do, Di)
+    # Tr[(w_star - q_t w_t) c (w_star - q_t w_t)^T]
+    return torch.einsum("noi,nij,njo->", residuals, c, residuals.transpose(1, 2))
+
+
+merge_prm = lambda *args, **kwargs: _merge_prm(*args, **kwargs)
+merge_prm_eigcov = lambda *args, **kwargs: _merge_prm(
+    *args, c_train=_get_eigcov(*args), c_test=_get_eigcov(*args), **kwargs
+)
+
+
+def _merge_prm(taus, c_train=None, c_test=None, max_iter=100, tol=1e-3, **kwargs):
+    """Solve: min_{w_con, q_t ortho} sum_t tr[(w_con - q_t w_t) sigma (w_con - q_t w_t)^T]
+
+    Args:
+        w: (N, Do, Di) - input matrices
+        c: (N, Di, Di) - covariance matrix (defaults to identity)
+        max_iter: maximum alternating minimization iterations
+        tol: convergence tolerance on loss change
+
+    Returns:
+        w_star: (Do, Di) - consensus matrix
+        q: (N, Do, Do) - orthogonal matrices
+        losses: list of scalar loss values per iteration
+    """
+    N, Do, Di = taus.shape
+
+    if c_train is None:
+        c_train = (
+            torch.eye(Di, device=taus.device, dtype=taus.dtype)
+            .unsqueeze(0)
+            .expand(N, -1, -1)
+        )
+    if c_test is None:
+        c_test = (
+            torch.eye(Di, device=taus.device, dtype=taus.dtype)
+            .unsqueeze(0)
+            .expand(N, -1, -1)
+        )
+
+    w_star = taus.mean(dim=0)
+    losses = []
+
+    c_sum_pinv = torch.linalg.pinv(c_train.sum(dim=0))
+    pbar = tqdm(range(max_iter), desc="Projected RegMean iterations", leave=False)
+
+    for iteration in pbar:
+        # Update q mats: orthogonal Procrustes
+        u, _, vt = torch.linalg.svd(
+            w_star @ c_train @ taus.transpose(1, 2), full_matrices=False
+        )
+        q_star = u @ vt  # (N, Do, Di)
+
+        # Update w_star: mean of rotated matrices
+        w_star = (q_star @ taus @ c_train).sum(dim=0) @ c_sum_pinv
+
+        # Compute loss
+        loss = _loss_prm(w_star, q_star, taus, c_test)
+        losses.append(loss.item())
+        pbar.set_postfix(loss=losses[-1])
+        if iteration > 0 and abs(losses[-2] - losses[-1]) < tol:
+            break
+
+    return w_star
