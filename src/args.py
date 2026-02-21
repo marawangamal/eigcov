@@ -183,20 +183,26 @@ def parse_arguments():
         "--cov-split",
         type=str,
         choices=["train", "test"],
-        default="test",
-        help="Dataset split for covariance collection (train or test).",
+        default="train",
+        help="Dataset split for covariance collection [train, test] (default: train).",
     )
     parser.add_argument(
         "--cov-num-batches",
         type=int,
-        default=None,
-        help="Max number of batches for covariance collection (default: all).",
+        default=10,
+        help="Max number of batches for covariance collection (default: 10).",
     )
     parser.add_argument(
-        "--swap-mha",
-        action="store_true",
-        default=False,
-        help="Replace nn.MultiheadAttention in the visual encoder with the custom MultiHeadAttention.",
+        "--cov-batch-size",
+        type=int,
+        default=32,
+        help="Batch size for covariance collection (default: 32).",
+    )
+    parser.add_argument(
+        "--mha",
+        choices=["packed", "split"],
+        default=None,
+        help="Replace nn.MultiheadAttention in the visual encoder with the custom MultiHeadAttention [packed, split] (default: None).",
     )
     parsed_args = parser.parse_args()
     parsed_args.device = "cuda" if torch.cuda.is_available() else "cpu"

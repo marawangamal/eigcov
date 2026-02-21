@@ -13,7 +13,7 @@ class _TaskVector(abc.ABC):
         vector=None,
         lazy=False,
         cache_window=50,  # Keeps `cache_window` layers in memory at a time
-        metadata={},  # to store dataset name for RegMean
+        covariance_path=None,
     ):
         """Initializes the task vector from a pretrained and a finetuned checkpoints.
 
@@ -26,7 +26,7 @@ class _TaskVector(abc.ABC):
         self._finetuned_checkpoint = finetuned_checkpoint
         self.cache_window = cache_window
         self._cache = {}
-        self.metadata = metadata
+        self.covariance_path = covariance_path
         if vector is not None:
             assert not self.lazy, "Cannot pass a vector if lazy is True"
             self._vector = vector
@@ -123,7 +123,9 @@ class _TaskVector(abc.ABC):
                     print(f"Warning, key {key} is not present in both task vectors.")
                     continue
                 new_vector[key] = self.vector[key] + other.vector[key]
-        return self.__class__(vector=new_vector, metadata=self.metadata, lazy=self.lazy)
+        return self.__class__(
+            vector=new_vector, covariance_path=self.covariance_path, lazy=self.lazy
+        )
 
     def __sub__(self, other):
         """Subtract two task vectors."""
@@ -140,7 +142,9 @@ class _TaskVector(abc.ABC):
             new_vector = {}
             for key in self.vector:
                 new_vector[key] = -self.vector[key]
-        return self.__class__(vector=new_vector, metadata=self.metadata, lazy=self.lazy)
+        return self.__class__(
+            vector=new_vector, covariance_path=self.covariance_path, lazy=self.lazy
+        )
 
     def __pow__(self, power):
         """Power of a task vector."""
@@ -148,7 +152,9 @@ class _TaskVector(abc.ABC):
             new_vector = {}
             for key in self.vector:
                 new_vector[key] = self.vector[key] ** power
-        return self.__class__(vector=new_vector, metadata=self.metadata, lazy=self.lazy)
+        return self.__class__(
+            vector=new_vector, covariance_path=self.covariance_path, lazy=self.lazy
+        )
 
     def __mul__(self, other):
         """Multiply a task vector by a scalar."""
@@ -156,7 +162,9 @@ class _TaskVector(abc.ABC):
             new_vector = {}
             for key in self.vector:
                 new_vector[key] = other * self.vector[key]
-        return self.__class__(vector=new_vector, metadata=self.metadata, lazy=self.lazy)
+        return self.__class__(
+            vector=new_vector, covariance_path=self.covariance_path, lazy=self.lazy
+        )
 
     def dot(self, other):
         """Dot product of two task vectors."""
@@ -196,7 +204,9 @@ class _TaskVector(abc.ABC):
         """Map a function over the task vector."""
         with torch.no_grad():
             return self.__class__(
-                vector=fn(self.vector), metadata=self.metadata, lazy=self.lazy
+                vector=fn(self.vector),
+                covariance_path=self.covariance_path,
+                lazy=self.lazy,
             )
 
 

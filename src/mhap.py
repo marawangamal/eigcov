@@ -6,7 +6,7 @@ import re
 import unittest
 
 
-class MultiHeadAttention(nn.Module):
+class MultiHeadAttentionPacked(nn.Module):
     def __init__(self, d_model, n_head, bias=False):
         super().__init__()
         assert d_model % n_head == 0
@@ -19,6 +19,7 @@ class MultiHeadAttention(nn.Module):
     def forward(self, query, key, value, attn_mask=None, key_padding_mask=None):
         seq_len, batch, _ = query.shape
         d = self.d_model
+        # [Do,Di]
         Wq = self.qk.weight[:d]
         Wk = self.qk.weight[d:]
         Wv = self.vot.weight[:d]
@@ -204,7 +205,7 @@ def swap_mha(model):
     """Recursively replace all nn.MultiheadAttention with our MultiHeadAttention."""
     for name, module in model.named_children():
         if isinstance(module, nn.MultiheadAttention):
-            custom = MultiHeadAttention(
+            custom = MultiHeadAttentionPacked(
                 d_model=module.embed_dim,
                 n_head=module.num_heads,
                 bias=module.in_proj_bias is not None,
@@ -224,7 +225,7 @@ class TestMultiHeadAttention(unittest.TestCase):
     def _make_pair(self, bias, direction="from_pytorch"):
         """Create matched PyTorch and custom MHA with shared weights."""
         pt = nn.MultiheadAttention(self.D_MODEL, self.N_HEAD, bias=bias)
-        custom = MultiHeadAttention(self.D_MODEL, self.N_HEAD, bias=bias)
+        custom = MultiHeadAttentionPacked(self.D_MODEL, self.N_HEAD, bias=bias)
         if direction == "from_pytorch":
             copy_weights_from_pytorch_mha(pt, custom)
         else:
@@ -299,7 +300,7 @@ class TestMultiHeadAttention(unittest.TestCase):
         for bias in [False, True]:
             with self.subTest(bias=bias):
                 pt1 = nn.MultiheadAttention(self.D_MODEL, self.N_HEAD, bias=bias)
-                custom = MultiHeadAttention(self.D_MODEL, self.N_HEAD, bias=bias)
+                custom = MultiHeadAttentionPacked(self.D_MODEL, self.N_HEAD, bias=bias)
                 pt2 = nn.MultiheadAttention(self.D_MODEL, self.N_HEAD, bias=bias)
 
                 copy_weights_from_pytorch_mha(pt1, custom)

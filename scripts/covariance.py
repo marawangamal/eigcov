@@ -101,7 +101,7 @@ def compute_covs(encoder, dataset_name, args, model_device="cuda", cov_device="c
         dataset_name,
         model.val_preprocess,
         location=args.data_location,
-        batch_size=args.batch_size,
+        batch_size=args.cov_batch_size,
         num_workers=args.num_workers,
     )
     split = args.cov_split
@@ -139,7 +139,6 @@ def compute_covs(encoder, dataset_name, args, model_device="cuda", cov_device="c
 
 if __name__ == "__main__":
     args = parse_arguments()
-    args.batch_size = 32
     args.save = f"checkpoints/{args.model}"
 
     results_dir = f"results/{args.model}"
@@ -161,7 +160,7 @@ if __name__ == "__main__":
     pretrained_ckpt = f"checkpoints/{args.model}/{tasks[0]}Val/zeroshot.pt"
 
     n_suffix = args.cov_num_batches if args.cov_num_batches is not None else "all"
-    b = args.batch_size
+    b = args.cov_batch_size
     for task in tasks:
         cache_path = (
             f"{results_dir}/covariance_{task}_{args.cov_split}_b{b}_n{n_suffix}.npz"

@@ -1,7 +1,9 @@
 import json
 import os
 
-from mha import copy_from_pytorch_state_dict, copy_to_pytorch_state_dict
+# from mha import copy_from_pytorch_state_dict, copy_to_pytorch_state_dict
+import mhap
+import mhas
 from utils import find_optimal_coef
 
 from src.args import parse_arguments
@@ -61,7 +63,7 @@ for dataset in eval_datasets:
             LinearizedTaskVector(
                 pretrained_checkpoint,
                 finetuned_checkpoint,
-                metadata={"task": dataset, "model": args.model},
+                covariance_path=f"results/{args.model}/covariance_{dataset}_{args.cov_split}_b{args.cov_batch_size}_n{args.cov_num_batches}.npz",
             )
         )
     elif args.finetuning_mode == "lora":
@@ -71,7 +73,7 @@ for dataset in eval_datasets:
             NonLinearTaskVector(
                 pretrained_checkpoint,
                 finetuned_checkpoint,
-                metadata={"task": dataset, "model": args.model},
+                covariance_path=f"results/{args.model}/covariance_{dataset}_{args.cov_split}_b{args.cov_batch_size}_n{args.cov_num_batches}.npz",
             )
         )
     else:
@@ -81,18 +83,29 @@ for dataset in eval_datasets:
             NonLinearTaskVector(
                 pretrained_checkpoint,
                 finetuned_checkpoint,
-                metadata={"task": dataset, "model": args.model},
+                covariance_path=f"results/{args.model}/covariance_{dataset}_{args.cov_split}_b{args.cov_batch_size}_n{args.cov_num_batches}.npz",
             )
         )
 
-if args.swap_mha:
-    task_vectors = [t.map(copy_from_pytorch_state_dict) for t in task_vectors]
+# For use with RegMean and Projected RegMean.
+#   i)  for projected regmean, mhap will package together orthgonally invariant matrices.
+#   ii) for regmean, mhas will use linear modules for all attention operations to collect covariances.
+if args.mha is not None:
+    copy_fn = {
+        "packed": mhap.copy_from_pytorch_state_dict,
+        "split": mhas.copy_from_pytorch_state_dict,
+    }[args.mha]
+    task_vectors = [t.map(copy_fn) for t in task_vectors]
 
 merge_name = getattr(args, "merge_func", "sum")
 task_vector = combine_task_vectors(task_vectors, merge_name, args)
 
-if args.swap_mha:
-    task_vector = task_vector.map(copy_to_pytorch_state_dict)
+if args.mha is not None:
+    copy_fn = {
+        "packed": mhap.copy_to_pytorch_state_dict,
+        "split": mhas.copy_to_pytorch_state_dict,
+    }[args.mha]
+    task_vector = task_vector.map(copy_fn)
 
 args.eval_datasets = [dataset + "Val" for dataset in eval_datasets]
 args.control_dataset = None

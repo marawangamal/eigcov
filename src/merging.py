@@ -86,7 +86,9 @@ def merge_mean(taus: torch.Tensor, **kwargs) -> torch.Tensor:
     return taus.mean(dim=0)
 
 
-# ************************** ISOC **************************
+# ---------------------------------------------------------------------------
+# ISOC
+# ---------------------------------------------------------------------------
 def _merge_isoc(taus: torch.Tensor, mode="mean", **kwargs):
     m = taus.sum(dim=0)
     u, s, vt = torch.linalg.svd(m, full_matrices=False)
@@ -107,7 +109,9 @@ merge_isoc_mean = lambda *args, **kwargs: _merge_isoc(*args, mode="mean", **kwar
 merge_isoc_rms = lambda *args, **kwargs: _merge_isoc(*args, mode="rms", **kwargs)
 
 
-# ************************** KNOTS **************************
+# ---------------------------------------------------------------------------
+# KNOTS
+# ---------------------------------------------------------------------------
 def _merge_knots(taus: torch.Tensor, merge_fn: Callable, **kwargs) -> torch.Tensor:
     # print device
     N, Do, Di = taus.shape
@@ -129,7 +133,9 @@ merge_knots_isoc_rms = lambda *args, **kwargs: _merge_knots(
 )
 
 
-# ************************** Subspace Alignment (SA) **************************
+# ---------------------------------------------------------------------------
+# Subspace Alignment (SA)
+# ---------------------------------------------------------------------------
 def merge_sa(taus: torch.Tensor, *args, **kwargs):
     m = torch.bmm(taus, taus.transpose(1, 2)).sum(dim=0)  # memory intensive
     # m = torch.einsum("nik,njk->ij", taus, taus)
@@ -144,7 +150,9 @@ def merge_sa(taus: torch.Tensor, *args, **kwargs):
 pinv = torch.linalg.pinv
 
 
-# ************************** RegMean **************************
+# ---------------------------------------------------------------------------
+# RegMean
+# ---------------------------------------------------------------------------
 def _param_key_to_module_key(key: str):
     return "image_encoder." + key.replace(".weight", "")
 
@@ -154,29 +162,24 @@ def _param_key_to_module_key(key: str):
 def merge_regmean(
     tau: torch.Tensor, key: str, vectors: Sequence[_TaskVector], **kwargs
 ):
-    # Get project root (parent of src directory)
-    project_root = Path(__file__).parent.parent
     c = []
     km = _param_key_to_module_key(key)
     for v in vectors:
-        task_name = v.metadata.get("task", None)
-        model_name = v.metadata.get("model", None)
-        if task_name is None:
-            raise ValueError("No task name in metadata")
-        if model_name is None:
-            raise ValueError("No model name in metadata")
-        cpath = project_root / "results" / model_name / f"covariance_{task_name}.npz"
+        cpath = v.covariance_path
+        if cpath is None:
+            raise ValueError(f"No covariance path provided for task vector {v}")
         with np.load(cpath) as cdict:
             if km not in cdict:
                 print(f"[skipped] {km} not found in {cpath}")
                 return tau.mean(dim=0)
             c.append(cdict[km])
     c = torch.stack([torch.as_tensor(x, device=tau.device, dtype=tau.dtype) for x in c])
-    # print(f"[success] {km} found in {cpath}")
     return (tau @ c).sum(dim=0) @ pinv(c.sum(dim=0))
 
 
-# ************************** Eigenvalue Covariance (EigCov) **************************
+# ---------------------------------------------------------------------------
+# Eigenvalue Covariance (EigCov)
+# ---------------------------------------------------------------------------
 def _get_eigcov(d: torch.Tensor, *args, **kwargs):
     c = d.transpose(1, 2) @ d
     return c
@@ -188,7 +191,9 @@ def merge_eigcov(d: torch.Tensor, *args, **kwargs):
     return (d @ c).sum(dim=0) @ pinv(c.sum(dim=0))
 
 
-# ************************* Projected RegMean **************************
+# ---------------------------------------------------------------------------
+# Projected RegMean
+# ---------------------------------------------------------------------------
 
 
 def _loss_prm(w_star, q, w, c):
@@ -273,6 +278,65 @@ def _merge_prm(
 
         # Compute loss
         loss = _loss_prm(w_star, q_star, taus, c_test)
+        losses.append(loss.item())
+        pbar.set_postfix(loss=losses[-1])
+        if iteration > 0 and abs(losses[-2] - losses[-1]) < tol:
+            break
+
+    return w_star
+
+
+# ---------------------------------------------------------------------------
+# Double-sided Projected RegMean
+# ---------------------------------------------------------------------------
+def _procrustes(m):
+    u, _, vt = torch.linalg.svd(m, full_matrices=False)
+    return u @ vt
+
+
+def _loss_dprm(w_star, q, p, w):
+    residuals = w_star.unsqueeze(0) - q @ w @ p.transpose(1, 2)  # (N, Do, Di)
+    # Tr[(w_star - q_t w_t p_t.T) I (w_star - q_t w_t p_t.T)^T]
+    return torch.einsum("noi,nio->", residuals, residuals.transpose(1, 2))
+
+
+def merge_dprm(taus, max_iter=100, tol=1e-3, key=None, **kwargs):
+    """Double-sided Projected RegMean.
+
+    Args:
+        taus: (N, Do, Di) - input matrices
+        max_iter: maximum alternating minimization iterations
+        tol: convergence tolerance on loss change
+    """
+    N, Do, Di = taus.shape
+
+    # Only orthogonal invariant layers are considered by prm
+    if key is None or not "qk.weight" in key or not "vot.weight" in key:
+        return taus.mean(dim=0)
+
+    w_star = taus.mean(dim=0)
+    losses = []
+
+    pbar = tqdm(range(max_iter), desc="Projected RegMean iterations", leave=False)
+    q_star = (
+        torch.eye(Do, device=taus.device, dtype=taus.dtype)
+        .unsqueeze(0)
+        .expand(N, -1, -1)
+    )
+    p_star = (
+        torch.eye(Do, device=taus.device, dtype=taus.dtype)
+        .unsqueeze(0)
+        .expand(N, -1, -1)
+    )
+
+    for iteration in pbar:
+        # Update q mats: orthogonal Procrustes
+        q_star = _procrustes(w_star @ p_star @ taus.transpose(1, 2))
+        p_star = _procrustes(w_star.transpose(1, 2) @ q_star @ taus)
+        w_star = (q_star @ taus @ p_star.transpose(1, 2)).sum(dim=0)
+
+        # Compute loss
+        loss = _loss_dprm(w_star, q_star, p_star, taus)
         losses.append(loss.item())
         pbar.set_postfix(loss=losses[-1])
         if iteration > 0 and abs(losses[-2] - losses[-1]) < tol:
