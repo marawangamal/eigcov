@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
+import re
 import unittest
 
 
@@ -73,6 +74,130 @@ def copy_weights_to_pytorch_mha(custom_mha, pt_mha):
             pt_mha.in_proj_bias[d : 2 * d].copy_(custom_mha.qk.bias[d:])
             pt_mha.in_proj_bias[2 * d :].copy_(custom_mha.vot.bias[:d])
             pt_mha.out_proj.bias.copy_(custom_mha.vot.bias[d:])
+
+
+def copy_from_pytorch_state_dict(state_dict):
+    """Convert a PyTorch MHA state_dict to our custom MHA format.
+
+    Finds all keys matching *.in_proj_weight, *.out_proj.weight etc.
+    and remaps them to *.qk.weight, *.vot.weight etc.
+    Non-MHA keys are passed through unchanged.
+    """
+    # Match any prefix ending with in_proj_weight or out_proj.weight/bias
+    mha_pattern = re.compile(
+        r"^(.*)\.(?:in_proj_weight|in_proj_bias|out_proj\.weight|out_proj\.bias)$"
+    )
+
+    # Group MHA keys by prefix
+    prefixes = set()
+    for key in state_dict:
+        m = mha_pattern.match(key)
+        if m:
+            prefixes.add(m.group(1))
+
+    new_state_dict = {}
+
+    # Copy non-MHA keys unchanged
+    for key in state_dict:
+        if not mha_pattern.match(key):
+            new_state_dict[key] = state_dict[key]
+
+    # Convert each MHA
+    for prefix in prefixes:
+        in_proj_weight = state_dict[f"{prefix}.in_proj_weight"]
+        d = in_proj_weight.size(0) // 3
+
+        new_state_dict[f"{prefix}.qk.weight"] = torch.cat(
+            [
+                in_proj_weight[:d],
+                in_proj_weight[d : 2 * d],
+            ],
+            dim=0,
+        )
+
+        out_proj_weight = state_dict[f"{prefix}.out_proj.weight"]
+        new_state_dict[f"{prefix}.vot.weight"] = torch.cat(
+            [
+                in_proj_weight[2 * d :],
+                out_proj_weight.T,
+            ],
+            dim=0,
+        )
+
+        if f"{prefix}.in_proj_bias" in state_dict:
+            in_proj_bias = state_dict[f"{prefix}.in_proj_bias"]
+            new_state_dict[f"{prefix}.qk.bias"] = torch.cat(
+                [
+                    in_proj_bias[:d],
+                    in_proj_bias[d : 2 * d],
+                ],
+                dim=0,
+            )
+
+            new_state_dict[f"{prefix}.vot.bias"] = torch.cat(
+                [
+                    in_proj_bias[2 * d :],
+                    state_dict[f"{prefix}.out_proj.bias"],
+                ],
+                dim=0,
+            )
+
+    return new_state_dict
+
+
+def copy_to_pytorch_state_dict(state_dict):
+    """Convert our custom MHA state_dict back to PyTorch MHA format.
+
+    Finds all keys matching *.qk.weight, *.vot.weight etc.
+    and remaps them to *.in_proj_weight, *.out_proj.weight etc.
+    Non-MHA keys are passed through unchanged.
+    """
+    mha_pattern = re.compile(r"^(.*)\.(?:qk\.weight|qk\.bias|vot\.weight|vot\.bias)$")
+
+    prefixes = set()
+    for key in state_dict:
+        m = mha_pattern.match(key)
+        if m:
+            prefixes.add(m.group(1))
+
+    new_state_dict = {}
+
+    for key in state_dict:
+        if not mha_pattern.match(key):
+            new_state_dict[key] = state_dict[key]
+
+    for prefix in prefixes:
+        qk_weight = state_dict[f"{prefix}.qk.weight"]
+        vot_weight = state_dict[f"{prefix}.vot.weight"]
+        d = qk_weight.size(0) // 2
+
+        new_state_dict[f"{prefix}.in_proj_weight"] = torch.cat(
+            [
+                qk_weight[:d],
+                qk_weight[d:],
+                vot_weight[:d],
+            ],
+            dim=0,
+        )
+
+        new_state_dict[f"{prefix}.out_proj.weight"] = vot_weight[d:].T
+
+        if f"{prefix}.qk.bias" in state_dict:
+            qk_bias = state_dict[f"{prefix}.qk.bias"]
+            vot_bias = state_dict[f"{prefix}.vot.bias"]
+
+            new_state_dict[f"{prefix}.in_proj_bias"] = torch.cat(
+                [
+                    qk_bias[:d],
+                    qk_bias[d:],
+                    vot_bias[:d],
+                ],
+                dim=0,
+            )
+
+            new_state_dict[f"{prefix}.out_proj.bias"] = vot_bias[d:]
+
+    return new_state_dict
 
 
 def swap_mha(model):
@@ -193,6 +318,26 @@ class TestMultiHeadAttention(unittest.TestCase):
                 pt_p = sum(p.numel() for p in pt.parameters())
                 cu_p = sum(p.numel() for p in custom.parameters())
                 self.assertEqual(pt_p, cu_p)
+
+    def test_state_dict_roundtrip(self):
+        for bias in [False, True]:
+            with self.subTest(bias=bias):
+                model = nn.Transformer(
+                    d_model=self.D_MODEL,
+                    nhead=self.N_HEAD,
+                    num_encoder_layers=2,
+                    num_decoder_layers=2,
+                    bias=bias,
+                )
+                sd = model.state_dict()
+
+                converted = copy_from_pytorch_state_dict(sd)
+                restored = copy_to_pytorch_state_dict(converted)
+
+                for key in sd:
+                    torch.testing.assert_close(
+                        sd[key], restored[key], msg=f"Mismatch on {key}"
+                    )
 
 
 if __name__ == "__main__":

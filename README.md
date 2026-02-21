@@ -15,7 +15,7 @@ cd $SLURM_TMPDIR && unzip vit_datasets_08.zip -d ./ && cd -
 python src/finetune.py --finetuning-mode=lora --model=ViT-B-32 --world-size=1 --openclip-cachedir=$SCRATCH/openclip --data-location=$SLURM_TMPDIR/datasets --train-dataset=SUN397
 
 # 3. Evaluate single task (none,standard,lora)
-python src/eval_single_task.py --model=ViT-B-32 --finetuning-mode=lora --openclip-cachedir=$SCRATCH/openclip --data-location=$SLURM_TMPDIR/datasets
+python src/eval_single_task.py --model=ViT-B-32 --finetuning-mode=standard --openclip-cachedir=$SCRATCH/openclip --data-location=$SLURM_TMPDIR/datasets
 
 # 4. Evaluate merged (none,standard,lora)
 python src/eval_task_addition.py --model=ViT-B-32 --finetuning-mode=lora --openclip-cachedir=$SCRATCH/openclip --data-location=datasets --merge-func=regmean --coeff-start=1.0 --n-eval-points=1

@@ -1,6 +1,7 @@
 import json
 import os
 
+from mha import copy_from_pytorch_state_dict, copy_to_pytorch_state_dict
 from utils import find_optimal_coef
 
 from src.args import parse_arguments
@@ -84,8 +85,14 @@ for dataset in eval_datasets:
             )
         )
 
+if args.swap_mha:
+    task_vectors = [t.map(copy_from_pytorch_state_dict) for t in task_vectors]
+
 merge_name = getattr(args, "merge_func", "sum")
 task_vector = combine_task_vectors(task_vectors, merge_name, args)
+
+if args.swap_mha:
+    task_vector = task_vector.map(copy_to_pytorch_state_dict)
 
 args.eval_datasets = [dataset + "Val" for dataset in eval_datasets]
 args.control_dataset = None

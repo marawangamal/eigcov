@@ -192,6 +192,12 @@ def parse_arguments():
         default=None,
         help="Max number of batches for covariance collection (default: all).",
     )
+    parser.add_argument(
+        "--swap-mha",
+        action="store_true",
+        default=False,
+        help="Replace nn.MultiheadAttention in the visual encoder with the custom MultiHeadAttention.",
+    )
     parsed_args = parser.parse_args()
     parsed_args.device = "cuda" if torch.cuda.is_available() else "cpu"
 

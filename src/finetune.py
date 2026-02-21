@@ -3,7 +3,7 @@ Reccommended distributed training command:
 # NOTE: mila cluster has only 64 cpus per node, so don't take more than 32 in total.
 salloc --gres=gpu:rtx8000:4 --ntasks-per-node=4 --cpus-per-task=8 --mem=32G
 Set num-workers to 2
-python src/finetune.py --finetuning-mode=lora --model=ViT-B-32 --world-size=4 --num-workers=1 --openclip-cachedir=$SCRATCH/openclip --data-location=$SLURM_TMPDIR/datasets --train-dataset=SUN397
+python src/finetune.py --finetuning-mode=lora --model=ViT-L-14 --world-size=4 --num-workers=1 --openclip-cachedir=$SCRATCH/openclip --data-location=$SLURM_TMPDIR/datasets
 
 
 # With --world-size=1 and num-workers=1, we get:

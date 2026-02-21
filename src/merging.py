@@ -217,7 +217,9 @@ merge_prm_eigcov = lambda *args, **kwargs: _merge_prm(
 )
 
 
-def _merge_prm(taus, c_train=None, c_test=None, max_iter=100, tol=1e-3, **kwargs):
+def _merge_prm(
+    taus, c_train=None, c_test=None, max_iter=100, tol=1e-3, key=None, **kwargs
+):
     """Solve: min_{w_con, q_t ortho} sum_t tr[(w_con - q_t w_t) sigma (w_con - q_t w_t)^T]
 
     Args:
@@ -232,6 +234,13 @@ def _merge_prm(taus, c_train=None, c_test=None, max_iter=100, tol=1e-3, **kwargs
         losses: list of scalar loss values per iteration
     """
     N, Do, Di = taus.shape
+
+    # Only orthogonal invariant layers are considered by prm
+    if key is None or not "qk.weight" in key or not "vot.weight" in key:
+        if c_train is None:
+            return taus.mean(dim=0)
+        else:
+            return (taus @ c_train).sum(dim=0) @ pinv(c_train.sum(dim=0))
 
     if c_train is None:
         c_train = (
