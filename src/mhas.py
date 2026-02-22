@@ -18,7 +18,16 @@ class MultiHeadAttentionSplit(nn.Module):
         self.v = nn.Linear(d_model, d_model, bias=bias)
         self.o = nn.Linear(d_model, d_model, bias=bias)
 
-    def forward(self, query, key, value, attn_mask=None, key_padding_mask=None):
+    def forward(
+        self,
+        query,
+        key,
+        value,
+        attn_mask=None,
+        key_padding_mask=None,
+        need_weights=True,
+        average_attn_weights=True,
+    ):
         seq_len, batch, _ = query.shape
         d = self.d_model
 
@@ -44,8 +53,11 @@ class MultiHeadAttentionSplit(nn.Module):
         context = context.permute(2, 0, 1, 3).contiguous().view(seq_len, batch, d)
         output = self.o(context)
 
-        attn_weights_avg = attn_weights.mean(dim=1)
-        return output, attn_weights_avg
+        if not need_weights:
+            return output, None
+        if average_attn_weights:
+            return output, attn_weights.mean(dim=1)
+        return output, attn_weights
 
 
 # ---------------------------------------------------------------------------
