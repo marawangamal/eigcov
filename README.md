@@ -37,8 +37,13 @@ cp vit_datasets_08.zip $SLURM_TMPDIR
 cd $SLURM_TMPDIR && unzip vit_datasets_08.zip -d ./ && cd -
 
 # 2. Finetune (options: standard,lora)
-python src/finetune.py --finetuning-mode=lora --model=ViT-L-14 --world-size=4 --num-workers 1 --openclip-cachedir=$SCRATCH/openclip --data-location=$SLURM_TMPDIR/datasets 
-# end
+python src/finetune.py \
+--finetuning-mode=standard \
+--model=ViT-B-16 \
+--world-size=4 \
+--num-workers 1 \
+--openclip-cachedir=$SCRATCH/openclip \
+--data-location=$SLURM_TMPDIR/datasets 
 ```
 
 ### Evaluation
@@ -62,6 +67,24 @@ python src/eval_task_addition.py --openclip-cachedir=$SCRATCH/openclip --data-lo
 # Generate covariance matrices
 python scripts/covariance.py --openclip-cachedir=$SCRATCH/openclip --data-location=$SLURM_TMPDIR/datasets \
 --model=ViT-B-16 --cov-split train --cov-num-batches 100 --cov-batch-size 32 --mha=split 
+```
+
+
+### Reproducing figures
+
+
+To reproduce Fig.3 (Covariance Error X Training time)
+```sh
+# Remove the cars checkpoint if it exists then run:
+python src/finetune.py \
+--finetuning-mode=standard \
+--model=ViT-B-16 \
+--world-size=1 \
+--num-workers 1 \
+--openclip-cachedir=$SCRATCH/openclip \
+--data-location=$SLURM_TMPDIR/datasets \
+--checkpoint-every 1000 \
+--train-dataset Cars
 ```
 
 <!-- DIVIDER -->

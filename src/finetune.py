@@ -192,6 +192,12 @@ def finetune(rank, args):
         args.epochs * num_batches // args.num_grad_accumulation,
     )
 
+    if is_main_process():
+        print(
+            "Total number of steps: ",
+            args.epochs * num_batches // args.num_grad_accumulation,
+        )
+
     # Saving zero-shot model (LoRA zeroshot is saved before LoRA is applied)
     if args.save is not None and is_main_process() and not lora_finetuning:
         os.makedirs(ckpdir, exist_ok=True)
@@ -240,12 +246,14 @@ def finetune(rank, args):
                 and is_main_process()
             ):
                 print("Saving checkpoint.")
-                model_path = (
-                    os.path.join(ckpdir, f"linear_checkpoint_{step}.pt")
-                    if linearized_finetuning
-                    else os.path.join(ckpdir, f"checkpoint_{step}.pt")
-                )
+                if linearized_finetuning:
+                    model_path = os.path.join(ckpdir, f"linear_checkpoint_{step}.pt")
+                elif lora_finetuning:
+                    model_path = os.path.join(ckpdir, f"lora_checkpoint_{step}.pt")
+                else:
+                    model_path = os.path.join(ckpdir, f"checkpoint_{step}.pt")
                 ddp_model.module.image_encoder.save(model_path)
+                print(f"Saved checkpoint to {model_path}")
 
             if (
                 step % print_every == 0
