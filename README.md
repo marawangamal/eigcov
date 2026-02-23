@@ -35,6 +35,7 @@ export PYTHONPATH="$PYTHONPATH:$PWD"
 export SSL_CERT_DIR=/etc/ssl/certs
 cp vit_datasets_08.zip $SLURM_TMPDIR
 cd $SLURM_TMPDIR && unzip vit_datasets_08.zip -d ./ && cd -
+# Set --data-location and --openclip defaults properly in args.py
 
 # 2. Finetune (options: standard,lora)
 python src/finetune.py \
@@ -53,21 +54,19 @@ python src/finetune.py \
 python src/eval_single_task.py --finetuning-mode=standard --openclip-cachedir=$SCRATCH/openclip --data-location=$SLURM_TMPDIR/datasets --model=ViT-B-32 
 
 # RegMean
-python src/eval_task_addition.py --openclip-cachedir=$SCRATCH/openclip --data-location=$SLURM_TMPDIR/datasets \
---model=ViT-B-16 --finetuning-mode=standard --merge-func=regmean --coeff-start=1.0 --n-eval-points=1 --mha=split \
+python src/eval_task_addition.py --model=ViT-B-16 --finetuning-mode=standard --merge-func=regmean --coeff-start=1.0 --n-eval-points=1 --mha=split \
 --cov-dir results/ViT-B-16/covariances_strain_n50_b32_tcov_attnsplit
 
 # Projected RegMean (with limited covariance set)
 # NOTE: do not try use mha=packed
-python src/eval_task_addition.py --openclip-cachedir=$SCRATCH/openclip --data-location=datasets \
---model=ViT-B-16 --finetuning-mode=standard  --merge-func=prm --coeff-start=1.0 --n-eval-points=1 --cov-num-batches=10
+python src/eval_task_addition.py --model=ViT-B-16 --finetuning-mode=standard  --merge-func=prm --coeff-start=1.0 --n-eval-points=1 --cov-num-batches=10
 
 ```
 ### Scripts
 ```sh
 # Generate covariance matrices
-python scripts/covariance.py --openclip-cachedir=$SCRATCH/openclip --data-location=$SLURM_TMPDIR/datasets \
---model=ViT-B-16 --cov-split train --cov-num-batches 100 --cov-batch-size 32 --mha=split 
+python scripts/covariance.py --model=ViT-B-16 --cov-split train --cov-num-batches 50 --cov-batch-size 32 --mha=split
+python scripts/covariance.py --model=ViT-B-16 --cov-split train --cov-num-batches 10 --cov-batch-size 32 --mha=split --cov-type sm --cov-estimator full
 ```
 
 

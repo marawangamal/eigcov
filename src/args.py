@@ -9,7 +9,7 @@ def parse_arguments():
     parser.add_argument(
         "--data-location",
         type=str,
-        default=os.path.expanduser("~/data"),
+        default=os.path.join(os.environ["SLURM_TMPDIR"], "datasets"),
         help="The root directory for the datasets.",
     )
     parser.add_argument(
@@ -81,13 +81,13 @@ def parse_arguments():
     parser.add_argument(
         "--cache-dir",
         type=str,
-        default=None,
+        default="None",
         help="Directory for caching features and encoder",
     )
     parser.add_argument(
         "--openclip-cachedir",
         type=str,
-        default=os.path.expanduser("~/openclip-cachedir/open_clip"),
+        default=os.path.join(os.environ["SCRATCH"], "openclip"),
         help="Directory for caching models from OpenCLIP",
     )
     parser.add_argument(
@@ -209,9 +209,20 @@ def parse_arguments():
         help="Batch size for covariance collection (default: 32).",
     )
     parser.add_argument(
-        "--cov-second-moment",
-        action="store_true",
-        help="Compute uncentered second moment E[xx^T] incrementally instead of covariance.",
+        "--cov-type",
+        choices=["cov", "sm"],  # covariance vs second moment (uncentered)
+        default="cov",
+        help="Type of covariance to collect (default: cov).",
+    )
+    parser.add_argument(
+        "--cov-estimator",
+        choices=["sampled", "full"],
+        default="sampled",
+        help=(
+            "How to estimate the covariance per layer. "
+            "'sampled': add a Dx1 vector per sample (one random token position); "
+            "'full': add the full DxT matrix per sample (default: sampled)."
+        ),
     )
     parser.add_argument(
         "--mha",

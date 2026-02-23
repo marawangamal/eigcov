@@ -12,8 +12,14 @@ Example usage:
 export PYTHONPATH="$PYTHONPATH:$PWD"
 python scripts/covariance.py --model=ViT-B-16 --openclip-cachedir=$SCRATCH/openclip --data-location=$SLURM_TMPDIR/datasets
 python scripts/covariance.py --cov-split train --cov-num-batches 100 --cov-batch-size 32 --mha=split ...
+
+# Generate covariance matrices
+python scripts/covariance.py --openclip-cachedir=$SCRATCH/openclip --data-location=$SLURM_TMPDIR/datasets \
+--model=ViT-B-16 --cov-split train --cov-num-batches 100 --cov-batch-size 32 --mha=split 
+
 """
 
+import gc
 import os
 import sys
 from pathlib import Path
@@ -44,7 +50,10 @@ class OnlineCovariance:
         self.meany = torch.zeros((dim1, dim2), device=device)
         self.C = torch.zeros((dim1, dim1), device=device)
         self.n = 0
-        self.add = self._add_cov if mode == "cov" else self._add_second_moment
+        self.add = {
+            "cov": self._add_cov,
+            "sm": self._add_second_moment,
+        }[mode]
 
     @property
     def cov(self):
@@ -60,10 +69,11 @@ class OnlineCovariance:
         x = x.to(self.device)
         y = y.to(self.device)
         self.n += 1
-        self.dx = x - self.meanx
-        self.meanx += self.dx / self.n
+        # NOTE: removed as instance attr (self.dx -> dx)
+        dx = x - self.meanx
+        self.meanx += dx / self.n
         self.meany += (y - self.meany) / self.n
-        self.C += self.dx @ (y - self.meany).T
+        self.C += dx @ (y - self.meany).T
 
     def _add_second_moment(self, x, y):
         # x is (D, T), y is (D, T)
@@ -75,7 +85,7 @@ class OnlineCovariance:
         self.C += x @ y.T
 
 
-def register_hooks(model, cov_device="cpu", mode="cov"):
+def register_hooks(model, args):
     cobjs = {}  # covariance objects
     handles = []
     for name, module in model.named_modules():
@@ -97,21 +107,26 @@ def register_hooks(model, cov_device="cpu", mode="cov"):
                 if not isinstance(x, torch.Tensor):
                     return
                 T, B, D = x.shape  # adjust to your real shape
-                if n not in cobjs:
-                    cobjs[n] = OnlineCovariance(D, device=cov_device, mode=mode)
-                cobj = cobjs[n]
-                for b in range(B):
-                    j = torch.randint(0, T, (1,)).item()
-                    # Add Dx1 vectors
-                    cobj.add(x[j : j + 1, b].T, x[j : j + 1, b].T)
-                    # cobj.add(x[j, b])
 
-                # for i in range(B):
-                #     j = torch.randint(0, T, (1,)).item()
-                #     v = inp[i, j].cpu().detach().numpy()
-                #     # normalize v
-                #     # v = v / np.linalg.norm(v)
-                #     ocov.add(v)
+                if args.cov_estimator == "sampled":
+                    # Add Dx1 vectors (one random token position per sample)
+                    if n not in cobjs:
+                        cobjs[n] = OnlineCovariance(
+                            D, device=args.cov_device, mode=args.cov_type
+                        )
+                    cobj = cobjs[n]
+                    for b in range(B):
+                        j = torch.randint(0, T, (1,)).item()
+                        cobj.add(x[j : j + 1, b].T, x[j : j + 1, b].T)
+                else:
+                    # Add DxT vectors (full sequence per sample)
+                    if n not in cobjs:
+                        cobjs[n] = OnlineCovariance(
+                            D, T, device=args.cov_device, mode=args.cov_type
+                        )
+                    cobj = cobjs[n]
+                    for b in range(B):
+                        cobj.add(x[:, b].T, x[:, b].T)
 
             return hook
 
@@ -119,13 +134,13 @@ def register_hooks(model, cov_device="cpu", mode="cov"):
     return cobjs, handles
 
 
-def compute_covs(encoder, dataset_name, args, model_device="cuda", cov_device="cpu"):
+def compute_covs(encoder, dataset_name, args):
     classification_head = get_classification_head(args, dataset_name)
     model = ImageClassifier(encoder, classification_head)
     model.freeze_head()
     # model.train()
     model.eval()
-    model.to(model_device)
+    model.to(args.model_device)
 
     dataset = get_dataset(
         dataset_name,
@@ -140,9 +155,7 @@ def compute_covs(encoder, dataset_name, args, model_device="cuda", cov_device="c
     dataset_size = len(loader.dataset)
     print(f"    {dataset_size} samples (split={split})")
 
-    cobjs, handles = register_hooks(
-        model, cov_device=cov_device, mode="sm" if args.cov_second_moment else "cov"
-    )
+    cobjs, handles = register_hooks(model, args)
     loss_fn = torch.nn.CrossEntropyLoss()
 
     total_batches = len(loader) if max_num_batches is None else None
@@ -157,7 +170,7 @@ def compute_covs(encoder, dataset_name, args, model_device="cuda", cov_device="c
                 break
             images, labels = images.cuda(), labels.cuda()
             model.zero_grad()
-            loss = loss_fn(model(images), labels)
+            _ = loss_fn(model(images), labels)
             n_batches += 1
     if max_num_batches is not None:
         print(f"    Used {n_batches} batches (cov_num_batches={max_num_batches})")
@@ -172,34 +185,34 @@ def compute_covs(encoder, dataset_name, args, model_device="cuda", cov_device="c
 if __name__ == "__main__":
     args = parse_arguments()
     args.save = f"checkpoints/{args.model}"
-
-    results_dir = f"results/{args.model}"
-    os.makedirs(results_dir, exist_ok=True)
-
-    model_device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    cov_device = torch.device("cpu")
+    args.model_device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    args.cov_device = torch.device("cpu")
 
     tasks = [
-        "Cars",
-        "DTD",
-        "EuroSAT",
-        "GTSRB",
-        "MNIST",
-        "RESISC45",
+        # "Cars",
+        # "DTD",
+        # "EuroSAT",
+        # "GTSRB",
+        # "MNIST",
+        # "RESISC45",
         "SUN397",
         "SVHN",
     ]
     pretrained_ckpt = f"checkpoints/{args.model}/{tasks[0]}Val/zeroshot.pt"
 
-    n_suffix = args.cov_num_batches if args.cov_num_batches is not None else "all"
-    b = args.cov_batch_size
-    t_part = "tsm" if args.cov_second_moment else "tcov"
-    cov_dir = f"{results_dir}/covariances_s{args.cov_split}_n{n_suffix}_b{b}_{t_part}_attn{args.mha}"
+    ss_num_batches = args.cov_num_batches if args.cov_num_batches is not None else "all"
+    ss_batch_size = args.cov_batch_size
+    ss_type = args.cov_type
+    ss_attn = args.mha
+    ss_split = args.cov_split
+    ss_estimator = args.cov_estimator
+    cov_dir = f"results/{args.model}/covariances_s{ss_split}_n{ss_num_batches}_b{ss_batch_size}_t{ss_type}_attn{ss_attn}_e{ss_estimator}"
     os.makedirs(cov_dir, exist_ok=True)
+
     print(f"Covariance directory: {cov_dir}")
     for task in tasks:
-        cache_path = f"{cov_dir}/covariance_{task}.npz"
-        if os.path.exists(cache_path) and not args.overwrite:
+        cov_path = f"{cov_dir}/covariance_{task}.npz"
+        if os.path.exists(cov_path) and not args.overwrite:
             print(f"Skipping {task} (cached)")
             continue
 
@@ -218,13 +231,7 @@ if __name__ == "__main__":
             }[args.mha]
             encoder = swap_fn(encoder)
 
-        cobjs = compute_covs(
-            encoder,
-            f"{task}Val",
-            args,
-            model_device=model_device,
-            cov_device=cov_device,
-        )
+        cobjs = compute_covs(encoder, f"{task}Val", args)
         del encoder
 
         # Convert cobjs to saveable arrays (np.savez can't save tuples of inhomogeneous shapes)
@@ -232,5 +239,7 @@ if __name__ == "__main__":
         for lname, cobj in cobjs.items():
             save_dict[lname] = cobj.cov.cpu().numpy()
             save_dict[f"{lname}_n"] = cobj.n
-        np.savez(cache_path, **save_dict)
-        print(f"  Saved to {cache_path}")
+        np.savez(cov_path, **save_dict)
+        print(f"  Saved to {cov_path}")
+        del cobjs, save_dict
+        gc.collect()
