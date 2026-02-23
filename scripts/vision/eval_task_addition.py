@@ -85,6 +85,7 @@ for dataset in eval_datasets:
                 covariance_path=cov_path,
             )
         )
+    print(f"Task vector {dataset} loaded")
 
 # For use with RegMean and Projected RegMean.
 #   i)  for projected regmean, mhap will package together orthgonally invariant matrices.

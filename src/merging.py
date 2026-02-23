@@ -77,6 +77,11 @@ def combine_task_vectors(
     return base.__class__(vector=new_vector)
 
 
+# ---------------------------------------------------------------------------
+# Basic
+# ---------------------------------------------------------------------------
+
+
 def merge_sum(taus: torch.Tensor, **kwargs) -> torch.Tensor:
     # Shape: (N, Do, Di) -> (Do, Di)
     return taus.sum(dim=0)
