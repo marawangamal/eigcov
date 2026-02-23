@@ -23,6 +23,7 @@ import gc
 import os
 import sys
 from pathlib import Path
+from typing import Dict
 import torch
 import numpy as np
 from tqdm import tqdm
@@ -188,16 +189,18 @@ if __name__ == "__main__":
     args.model_device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     args.cov_device = torch.device("cpu")
 
-    tasks = [
-        # "Cars",
-        # "DTD",
-        # "EuroSAT",
-        # "GTSRB",
-        # "MNIST",
-        # "RESISC45",
-        "SUN397",
-        "SVHN",
-    ]
+    # tasks = [
+    #     # "Cars",
+    #     # "DTD",
+    #     # "EuroSAT",
+    #     # from here:
+    #     # "GTSRB",
+    #     # "MNIST",
+    #     # "RESISC45",
+    #     # "SUN397",
+    #     # "SVHN",
+    # ]
+    tasks = args.train_dataset
     pretrained_ckpt = f"checkpoints/{args.model}/{tasks[0]}Val/zeroshot.pt"
 
     ss_num_batches = args.cov_num_batches if args.cov_num_batches is not None else "all"
@@ -235,11 +238,15 @@ if __name__ == "__main__":
         del encoder
 
         # Convert cobjs to saveable arrays (np.savez can't save tuples of inhomogeneous shapes)
-        save_dict = {}
-        for lname, cobj in cobjs.items():
-            save_dict[lname] = cobj.cov.cpu().numpy()
-            save_dict[f"{lname}_n"] = cobj.n
-        np.savez(cov_path, **save_dict)
+        # two loops to save memory
+        for lname in list(cobjs):
+            cobjs[f"{lname}_n"] = cobjs[lname].n
+        cobjs: Dict = {
+            k: v.cov.cpu().numpy() if isinstance(v, OnlineCovariance) else v
+            for k, v in cobjs.items()
+        }
+
+        np.savez(cov_path, **cobjs)
         print(f"  Saved to {cov_path}")
-        del cobjs, save_dict
+        del cobjs
         gc.collect()
