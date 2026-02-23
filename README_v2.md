@@ -3,39 +3,41 @@
 ## Repository Structure
 
 ```
-src/
+src/                         # Library code (importable modules)
 ├── task_vectors.py          # Task vector arithmetic (model-agnostic)
 ├── merging.py               # Merging strategies: sum, RegMean, EigenCov, PRM, ...
 ├── merging_ties.py          # TIES merging
 ├── covariance.py            # OnlineCovariance + register_hooks (model-agnostic)
+├── distributed.py           # DDP utilities (model-agnostic)
+├── mhap.py / mhas.py        # Custom MHA variants: packed / split (model-agnostic)
 ├── args.py                  # Shared argument parser
 ├── utils.py                 # Shared utilities
 │
-├── vision/                  # Vision-specific code (OpenCLIP / ViT)
+├── vision/                  # Vision-specific library code (OpenCLIP / ViT)
 │   ├── modeling.py          # ImageEncoder, ImageClassifier
 │   ├── heads.py             # Zero-shot classification heads
-│   ├── finetune.py          # Vision fine-tuning
-│   ├── eval.py              # Vision evaluation
-│   ├── eval_single_task.py
-│   ├── eval_task_addition.py
-│   ├── eval_task_negation.py
+│   ├── eval.py              # eval_single_dataset, evaluate_task_vector, ...
 │   ├── linearize.py         # Taylor-linearized vision encoder
-│   ├── distributed.py       # DDP utilities
-│   ├── mhap.py / mhas.py    # Custom MHA variants (packed / split)
 │   └── datasets/            # MNIST, Cars, DTD, EuroSAT, GTSRB, ...
 │
-└── language/                # Language-specific code (TODO)
+└── language/                # Language-specific library code (TODO)
     ├── modeling.py
-    ├── finetune.py
     ├── eval.py
     └── datasets/
 
-scripts/
-├── covariance.py            # Collect per-layer covariance matrices (vision)
-├── decorrelation*.py        # Activation–gradient decorrelation analysis
-├── interference.py          # Per-layer interference analysis
-├── disentanglement.py
-└── gmag.py
+scripts/                     # Entry points (run directly)
+├── setup.sh
+├── vision/
+│   ├── finetune.py          # Fine-tune vision models
+│   ├── eval_single_task.py  # Evaluate single fine-tuned model
+│   ├── eval_task_addition.py
+│   ├── eval_task_negation.py
+│   ├── covariance.py        # Collect per-layer covariance matrices
+│   ├── decorrelation*.py    # Activation–gradient decorrelation analysis
+│   ├── interference.py      # Per-layer interference analysis
+│   ├── disentanglement.py
+│   └── gmag.py
+└── language/                # (TODO)
 ```
 
 ## Setup
@@ -51,7 +53,7 @@ export SSL_CERT_DIR=/etc/ssl/certs
 ### 1. Fine-tune
 
 ```sh
-python src/vision/finetune.py \
+python scripts/vision/finetune.py \
   --finetuning-mode=standard \
   --model=ViT-B-16 \
   --world-size=4 \
@@ -65,7 +67,7 @@ Options for `--finetuning-mode`: `standard`, `lora`, `linear`, `posthoc`.
 ### 2. Evaluate single task
 
 ```sh
-python src/vision/eval_single_task.py \
+python scripts/vision/eval_single_task.py \
   --finetuning-mode=standard \
   --model=ViT-B-16 \
   --openclip-cachedir=$SCRATCH/openclip \
@@ -102,21 +104,21 @@ python scripts/covariance.py \
 
 ```sh
 # Task Arithmetic
-python src/vision/eval_task_addition.py \
+python scripts/vision/eval_task_addition.py \
   --model=ViT-B-16 --finetuning-mode=standard --merge-func=sum
 
 # EigenCov (data-free)
-python src/vision/eval_task_addition.py \
+python scripts/vision/eval_task_addition.py \
   --model=ViT-B-16 --finetuning-mode=standard --merge-func=eigcov
 
 # RegMean (requires covariance)
-python src/vision/eval_task_addition.py \
+python scripts/vision/eval_task_addition.py \
   --model=ViT-B-16 --finetuning-mode=standard --merge-func=regmean \
   --mha=split \
   --cov-dir=results/ViT-B-16/covariances_strain_n50_b32_tcov_attnsplit_esampled
 
 # Projected RegMean
-python src/vision/eval_task_addition.py \
+python scripts/vision/eval_task_addition.py \
   --model=ViT-B-16 --finetuning-mode=standard --merge-func=prm \
   --coeff-start=1.0 --n-eval-points=1
 ```
