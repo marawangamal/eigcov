@@ -122,6 +122,7 @@ def parse_arguments():
     )
     parser.add_argument(
         "--finetuning-mode",
+        default="standard",
         choices=["standard", "linear", "posthoc", "lora", "none"],
         help="Whether to use linearized models or not.",
     )

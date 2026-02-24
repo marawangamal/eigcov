@@ -52,9 +52,11 @@ export SSL_CERT_DIR=/etc/ssl/certs
 
 ### 1. Fine-tune
 
+<!-- salloc --gres=gpu:rtx8000:4 --ntasks-per-node=1 --cpus-per-task=8 --mem=32G -->
+
 ```sh
 python scripts/vision/finetune.py \
-  --finetuning-mode=standard \
+  --finetuning-mode=linear \
   --model=ViT-B-16 \
   --world-size=1 \
   --num-workers=1 \

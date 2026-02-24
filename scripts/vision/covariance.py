@@ -34,7 +34,7 @@ from tqdm import tqdm
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.task_vectors import NonLinearTaskVector
+from src.task_vectors import LinearizedTaskVector, NonLinearTaskVector
 from src.vision.heads import get_classification_head
 from src.vision.modeling import ImageClassifier
 from src.args import parse_arguments
@@ -116,8 +116,6 @@ if __name__ == "__main__":
         "SUN397",
         "SVHN",
     ]
-    # tasks = args.train_dataset
-    pretrained_ckpt = f"checkpoints/{args.model}/{tasks[0]}Val/zeroshot.pt"
 
     ss_num_batches = args.cov_num_batches if args.cov_num_batches is not None else "all"
     ss_batch_size = args.cov_batch_size
@@ -125,7 +123,8 @@ if __name__ == "__main__":
     ss_attn = args.mha
     ss_split = args.cov_split
     ss_estimator = args.cov_estimator
-    cov_dir = f"results/{args.model}/covariances_s{ss_split}_n{ss_num_batches}_b{ss_batch_size}_t{ss_type}_attn{ss_attn}_e{ss_estimator}"
+    ss_fm = args.finetuning_mode
+    cov_dir = f"results/{args.model}/covariances_s{ss_split}_n{ss_num_batches}_b{ss_batch_size}_t{ss_type}_attn{ss_attn}_e{ss_estimator}_ft{ss_fm}"
     os.makedirs(cov_dir, exist_ok=True)
 
     print(f"Covariance directory: {cov_dir}")
@@ -136,10 +135,30 @@ if __name__ == "__main__":
             continue
 
         print(f"\nCollecting covariance for {task}")
-        tv = NonLinearTaskVector(
-            pretrained_ckpt, f"checkpoints/{args.model}/{task}Val/finetuned.pt"
-        )
-        encoder = tv.apply_to(pretrained_ckpt, scaling_coef=1.0)
+        if args.finetuning_mode == "linear":
+            pretrained_checkpoint = f"{args.save}/{task}Val/linear_zeroshot.pt"
+            finetuned_checkpoint = f"{args.save}/{task}Val/linear_finetuned.pt"
+            tv = LinearizedTaskVector(
+                pretrained_checkpoint,
+                finetuned_checkpoint,
+                covariance_path=cov_path,
+            )
+        elif args.finetuning_mode == "lora":
+            pretrained_checkpoint = f"{args.save}/{task}Val/zeroshot.pt"
+            finetuned_checkpoint = f"{args.save}/{task}Val/lora_finetuned.pt"
+            tv = NonLinearTaskVector(
+                pretrained_checkpoint,
+                finetuned_checkpoint,
+            )
+        else:
+            pretrained_checkpoint = f"{args.save}/{task}Val/zeroshot.pt"
+            finetuned_checkpoint = f"{args.save}/{task}Val/finetuned.pt"
+            tv = NonLinearTaskVector(
+                pretrained_checkpoint,
+                finetuned_checkpoint,
+            )
+
+        encoder = tv.apply_to(pretrained_checkpoint, scaling_coef=1.0)
         del tv
 
         # swap mha
