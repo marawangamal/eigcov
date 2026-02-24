@@ -189,6 +189,10 @@ merge_knots_tsv = lambda *args, **kwargs: _merge_knots(
     *args, merge_fn=merge_tsv, **kwargs
 )
 
+merge_knots_eigcov = lambda *args, **kwargs: _merge_knots(
+    *args, merge_fn=merge_eigcov, **kwargs
+)
+
 
 # ---------------------------------------------------------------------------
 # Subspace Alignment (SA)
