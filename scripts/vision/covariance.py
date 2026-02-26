@@ -138,10 +138,22 @@ if __name__ == "__main__":
         if args.finetuning_mode == "linear":
             pretrained_checkpoint = f"{args.save}/{task}Val/linear_zeroshot.pt"
             finetuned_checkpoint = f"{args.save}/{task}Val/linear_finetuned.pt"
+            pretrained_nonlinear_checkpoint = f"{args.save}/{task}Val/zeroshot.pt"
+
+            # Get param names
+            nonlinear_encoder = torch.load(
+                pretrained_nonlinear_checkpoint, map_location="cpu", weights_only=False
+            )
+            param_names = [n for n, _ in nonlinear_encoder.named_parameters()]
+            del nonlinear_encoder
+
             tv = LinearizedTaskVector(
                 pretrained_checkpoint,
                 finetuned_checkpoint,
                 covariance_path=cov_path,
+            )
+            encoder = tv.apply_to_nonlinear(
+                pretrained_nonlinear_checkpoint, param_names, scaling_coef=1.0
             )
         elif args.finetuning_mode == "lora":
             pretrained_checkpoint = f"{args.save}/{task}Val/zeroshot.pt"
@@ -150,6 +162,7 @@ if __name__ == "__main__":
                 pretrained_checkpoint,
                 finetuned_checkpoint,
             )
+            encoder = tv.apply_to(pretrained_checkpoint, scaling_coef=1.0)
         else:
             pretrained_checkpoint = f"{args.save}/{task}Val/zeroshot.pt"
             finetuned_checkpoint = f"{args.save}/{task}Val/finetuned.pt"
@@ -157,8 +170,8 @@ if __name__ == "__main__":
                 pretrained_checkpoint,
                 finetuned_checkpoint,
             )
+            encoder = tv.apply_to(pretrained_checkpoint, scaling_coef=1.0)
 
-        encoder = tv.apply_to(pretrained_checkpoint, scaling_coef=1.0)
         del tv
 
         # swap mha
