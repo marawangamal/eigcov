@@ -1,9 +1,9 @@
 import json
 
 from src.args import parse_arguments
-from src.eval import eval_single_dataset
-from src.linearize import LinearizedImageEncoder
-from src.task_vectors import LinearizedTaskVector, NonLinearTaskVector
+from src.vision.eval import eval_single_dataset
+from src.vision.linearize import LinearizedImageEncoder
+from src.vision.task_vectors import LinearizedTaskVector, NonLinearTaskVector
 
 args = parse_arguments()
 if args.seed is not None:

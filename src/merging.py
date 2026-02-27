@@ -77,6 +77,11 @@ def combine_task_vectors(
     return base.__class__(vector=new_vector)
 
 
+# ---------------------------------------------------------------------------
+# Basic
+# ---------------------------------------------------------------------------
+
+
 def merge_sum(taus: torch.Tensor, **kwargs) -> torch.Tensor:
     # Shape: (N, Do, Di) -> (Do, Di)
     return taus.sum(dim=0)
@@ -84,6 +89,51 @@ def merge_sum(taus: torch.Tensor, **kwargs) -> torch.Tensor:
 
 def merge_mean(taus: torch.Tensor, **kwargs) -> torch.Tensor:
     return taus.mean(dim=0)
+
+
+# ---------------------------------------------------------------------------
+# TSV
+# ---------------------------------------------------------------------------
+
+
+def _compute_procrustes(x: torch.Tensor) -> torch.Tensor:
+    u, _, vt = torch.linalg.svd(x, full_matrices=False)
+    return u @ vt
+
+
+def merge_tsv(taus: torch.Tensor, **kwargs) -> torch.Tensor:
+    """Computes the TSV merge of the given tensors.
+
+    Computes: Uo  Dc Vto
+
+    Args:
+        tensors (torch.Tensor): The tensors to merge. Shape: (N_tasks, Di, Do)
+
+    Returns:
+        torch.Tensor: The merged tensors. Shape: (Di, Do)
+    """
+
+    N_tasks = len(taus)
+    u, s, vt = torch.linalg.svd(taus, full_matrices=False)
+    R = min(u.shape[1], vt.shape[2])
+    Rp = R // N_tasks
+    u, s, vt = u[:, :, :Rp], s[:, :Rp], vt[:, :Rp, :]
+
+    # # # w/o decorrelation
+    # tau_bl = torch.einsum("bij,bj,bjk->bik", u, s, vt)
+    # tau[layer_name] = tau_bl.sum(dim=0)
+
+    # w/ decorrelation
+    B, Di, _ = u.shape
+    _, _, Do = vt.shape
+    # (Di, B, R)
+    u_hat = u.permute(1, 0, 2).reshape(Di, B * Rp)
+    s_hat = s.reshape(-1)
+    vt_hat = vt.reshape(B * Rp, Do)
+    u_ortho = _compute_procrustes(u_hat)  # (Di, Rp)
+    vt_ortho = _compute_procrustes(vt_hat.T).T  # (Rp, Do)
+    tau_l = torch.einsum("ij,j,jk->ik", u_ortho, s_hat, vt_ortho)  # (Di, Do)
+    return tau_l
 
 
 # ---------------------------------------------------------------------------
@@ -116,10 +166,14 @@ def _merge_knots(taus: torch.Tensor, merge_fn: Callable, **kwargs) -> torch.Tens
     # print device
     N, Do, Di = taus.shape
     d = taus.permute(1, 0, 2).reshape(Do, N * Di)
+    # [Do, R], [R, R], [R, N*Di]
     u, s, vt = torch.linalg.svd(d, full_matrices=False)
-    taus_tilde = torch.einsum("ij,jnk->nik", torch.diag(s), vt.reshape(-1, N, Di))
-    tau_tilde = merge_fn(taus_tilde, **kwargs)
-    return u @ tau_tilde
+    # taus_tilde = torch.einsum("ij,jnk->nik", torch.diag(s), vt.reshape(-1, N, Di))
+    # tau_tilde = merge_fn(taus_tilde, **kwargs)
+    # return u @ tau_tilde
+    # [R, N*Di] -> [N, R, Di] -> [R, Di]
+    tau_tilde = merge_fn(vt.reshape(-1, N, Di).permute(1, 0, 2), **kwargs)
+    return torch.einsum("or,r,ri->oi", u, s, tau_tilde)
 
 
 merge_knots_ta = lambda *args, **kwargs: _merge_knots(
@@ -130,6 +184,13 @@ merge_knots_isoc_mean = lambda *args, **kwargs: _merge_knots(
 )
 merge_knots_isoc_rms = lambda *args, **kwargs: _merge_knots(
     *args, merge_fn=merge_isoc_rms, **kwargs
+)
+merge_knots_tsv = lambda *args, **kwargs: _merge_knots(
+    *args, merge_fn=merge_tsv, **kwargs
+)
+
+merge_knots_eigcov = lambda *args, **kwargs: _merge_knots(
+    *args, merge_fn=merge_eigcov, **kwargs
 )
 
 

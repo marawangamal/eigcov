@@ -12,11 +12,11 @@ import os
 import torch
 import numpy as np
 
-from src.task_vectors import NonLinearTaskVector
-from src.heads import get_classification_head
-from src.modeling import ImageClassifier
+from src.vision.task_vectors import NonLinearTaskVector
+from src.vision.heads import get_classification_head
+from src.vision.modeling import ImageClassifier
 from src.args import parse_arguments
-from src.datasets.registry import get_dataset
+from src.vision.datasets.registry import get_dataset
 
 
 def register_activation_hooks(model):

@@ -1,56 +1,19 @@
-"""
-Reccommended distributed training command:
-# NOTE: mila cluster has only 64 cpus per node, so don't take more than 32 in total.
-salloc --gres=gpu:rtx8000:4 --ntasks-per-node=4 --cpus-per-task=8 --mem=32G
-Set num-workers to 2
-python src/finetune.py --finetuning-mode=lora --model=ViT-L-14 --world-size=4 --num-workers=1 --openclip-cachedir=$SCRATCH/openclip --data-location=$SLURM_TMPDIR/datasets
-
-
-# With --world-size=1 and num-workers=1, we get:
-Train Epoch: 0 [0% 0/133]       Loss: 1.561648  Data (t) 0.046  Batch (t) 0.781 Elapsed 01:02
-Train Epoch: 0 [75% 100/133]    Loss: 1.393365  Data (t) 0.253  Batch (t) 0.298 Elapsed 01:34
-Train Epoch: 1 [50% 67/133]     Loss: 1.222313  Data (t) 0.258  Batch (t) 0.300 Elapsed 02:54
-Train Epoch: 2 [26% 34/133]     Loss: 1.066954  Data (t) 0.258  Batch (t) 0.302 Elapsed 04:09
-Train Epoch: 3 [1% 1/133]       Loss: 1.162195  Data (t) 0.227  Batch (t) 0.270 Elapsed 05:29
-Train Epoch: 3 [76% 101/133]    Loss: 0.948469  Data (t) 0.247  Batch (t) 0.291 Elapsed 06:00
-
-With --world-size=4 and num-workers=1, we get:
-Train Epoch: 0/15 [0% 0/133]    Loss: 1.298983  Data (t) 0.017  Batch (t) 0.989 Elapsed 00:18
-Train Epoch: 0/15 [75% 100/133] Loss: 1.357539  Data (t) 0.046  Batch (t) 0.087 Elapsed 00:27
-Train Epoch: 1/15 [50% 67/133]  Loss: 1.099862  Data (t) 0.049  Batch (t) 0.093 Elapsed 00:57
-Train Epoch: 2/15 [26% 34/133]  Loss: 1.305925  Data (t) 0.043  Batch (t) 0.085 Elapsed 01:47
-Train Epoch: 3/15 [1% 1/133]    Loss: 1.260996  Data (t) 0.319  Batch (t) 0.361 Elapsed 02:18
-Train Epoch: 3/15 [76% 101/133] Loss: 0.832681  Data (t) 0.042  Batch (t) 0.085 Elapsed 02:28
-Train Epoch: 4/15 [51% 68/133]  Loss: 0.598518  Data (t) 0.042  Batch (t) 0.084 Elapsed 02:58
-
-# With --world-size=4 and num-workers=2, we get:
-Train Epoch: 0/15 [0% 0/133]    Loss: 1.140516  Data (t) 0.016  Batch (t) 1.658 Elapsed 01:02
-Train Epoch: 0/15 [75% 100/133] Loss: 1.342225  Data (t) 0.044  Batch (t) 0.085 Elapsed 01:11
-Train Epoch: 1/15 [50% 67/133]  Loss: 1.173152  Data (t) 0.043  Batch (t) 0.086 Elapsed 02:06
-Train Epoch: 2/15 [26% 34/133]  Loss: 1.362261  Data (t) 0.053  Batch (t) 0.094 Elapsed 03:05
-Train Epoch: 3/15 [1% 1/133]    Loss: 1.342716  Data (t) 0.832  Batch (t) 0.876 Elapsed 03:56
-Train Epoch: 3/15 [76% 101/133] Loss: 0.793116  Data (t) 0.046  Batch (t) 0.087 Elapsed 04:05
-
-With --world-size=4 and num-workers=4, we get:
-Train Epoch: 0/15 [0% 0/133]    Loss: 1.284399  Data (t) 0.019  Batch (t) 0.841 Elapsed 01:36
-Train Epoch: 0/15 [75% 100/133] Loss: 1.329540  Data (t) 0.045  Batch (t) 0.087 Elapsed 01:45
-Train Epoch: 1/15 [50% 67/133]  Loss: 1.213168  Data (t) 0.042  Batch (t) 0.085 Elapsed 03:36
-Train Epoch: 2/15 [26% 34/133]  Loss: 1.290113  Data (t) 0.044  Batch (t) 0.085 Elapsed 05:13
-"""
-
 import os
 import time
 
+import numpy as np
 import torch
+import torch.nn.functional as F
+
 
 from src.args import parse_arguments
-from src.datasets.common import get_dataloader, maybe_dictionarize
-from src.datasets.registry import get_dataset
+from src.vision.datasets.common import get_dataloader, maybe_dictionarize
+from src.vision.datasets.registry import get_dataset
 from src.distributed import cleanup_ddp, distribute_loader, is_main_process, setup_ddp
-from src.eval import eval_single_dataset
-from src.heads import get_classification_head
-from src.linearize import LinearizedImageEncoder
-from src.modeling import ImageClassifier, ImageEncoder, apply_lora, merge_lora
+from src.vision.eval import eval_single_dataset
+from src.vision.heads import get_classification_head
+from src.vision.linearize import LinearizedImageEncoder
+from src.vision.modeling import ImageClassifier, ImageEncoder, apply_lora, merge_lora
 from src.utils import LabelSmoothing, cosine_lr
 
 
@@ -208,6 +171,39 @@ def finetune(rank, args):
         )
         ddp_model.module.image_encoder.save(model_path)
 
+    # --- Cosine similarity tracking setup ---
+    _cosine_hooks = []
+    _grad_k = None
+    _grad_k1 = None
+    _cosine_sim_log = []  # list of (step, cos_sim)
+    _last_cos_sim = float("nan")
+
+    if args.cosine_samples > 0 and is_main_process():
+        param_offsets = []
+        offset = 0
+        for p in params:
+            param_offsets.append((offset, offset + p.numel(), p))
+            offset += p.numel()
+        total_grad_elements = offset
+
+        _sampled_indices = torch.randperm(total_grad_elements)[: args.cosine_samples]
+        _grad_k = torch.zeros(args.cosine_samples)
+        _grad_k1 = torch.zeros(args.cosine_samples)
+
+        for start, end, p in param_offsets:
+            mask = (_sampled_indices >= start) & (_sampled_indices < end)
+            if not mask.any():
+                continue
+            positions = torch.where(mask)[0]
+            local_idxs = _sampled_indices[positions] - start
+
+            def _make_hook(pos, lidxs):
+                def _hook(grad):
+                    _grad_k1[pos] += grad.detach().flatten()[lidxs]
+                return _hook
+
+            _cosine_hooks.append(p.register_hook(_make_hook(positions, local_idxs)))
+
     run_start_time = time.perf_counter()
     for epoch in range(args.epochs):
         ddp_model.train()
@@ -236,6 +232,16 @@ def finetune(rank, args):
 
                 torch.nn.utils.clip_grad_norm_(params, 1.0)
                 optimizer.step()
+
+                if args.cosine_samples > 0 and is_main_process():
+                    if _grad_k.norm() > 0:
+                        _last_cos_sim = F.cosine_similarity(
+                            _grad_k1.unsqueeze(0), _grad_k.unsqueeze(0)
+                        ).item()
+                        _cosine_sim_log.append((step, _last_cos_sim))
+                    _grad_k.copy_(_grad_k1)
+                    _grad_k1.zero_()
+
                 optimizer.zero_grad()
 
             batch_time = time.time() - start_time
@@ -262,12 +268,27 @@ def finetune(rank, args):
             ):
                 percent_complete = 100 * i / len(ddp_loader)
                 run_elapsed = time.perf_counter() - run_start_time
+                cos_str = (
+                    f"\tCos sim {_last_cos_sim:.4f}" if args.cosine_samples > 0 else ""
+                )
                 print(
                     f"Train Epoch: {epoch}/{args.epochs} [{percent_complete:.0f}% {i}/{len(dataset.train_loader)}]\t"  # noqa: E501
                     f"Loss: {loss.item():.6f}\tData (t) {data_time:.3f}\tBatch (t) {batch_time:.3f}\t"  # noqa: E501
-                    f"Elapsed {_format_duration(run_elapsed)}",  # noqa: E501
+                    f"Elapsed {_format_duration(run_elapsed)}{cos_str}",  # noqa: E501
                     flush=True,
                 )
+
+    # Cosine sim cleanup and save
+    if args.cosine_samples > 0 and is_main_process():
+        for h in _cosine_hooks:
+            h.remove()
+        if _cosine_sim_log and args.save is not None:
+            steps_arr, sims_arr = zip(*_cosine_sim_log)
+            np.savez(
+                os.path.join(ckpdir, "cosine_sim.npz"),
+                steps=np.array(steps_arr),
+                cosine_sim=np.array(sims_arr),
+            )
 
     # FIXME: Make this work with DDP.
     if is_main_process():

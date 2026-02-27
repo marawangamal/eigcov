@@ -2,8 +2,6 @@ import abc
 
 import torch
 
-from src.linearize import LinearizedImageEncoder
-
 
 class _TaskVector(abc.ABC):
     def __init__(
@@ -14,6 +12,7 @@ class _TaskVector(abc.ABC):
         lazy=False,
         cache_window=50,  # Keeps `cache_window` layers in memory at a time
         covariance_path=None,
+        _transform_fn=None,
     ):
         """Initializes the task vector from a pretrained and a finetuned checkpoints.
 
@@ -27,6 +26,7 @@ class _TaskVector(abc.ABC):
         self.cache_window = cache_window
         self._cache = {}
         self.covariance_path = covariance_path
+        self._transform_fn = _transform_fn
         if vector is not None:
             assert not self.lazy, "Cannot pass a vector if lazy is True"
             self._vector = vector
@@ -43,7 +43,10 @@ class _TaskVector(abc.ABC):
     @property
     def vector(self):
         if self.lazy:
-            return self._build_vector()
+            v = self._build_vector()
+            if self._transform_fn is not None:
+                v = self._transform_fn(v)
+            return v
         else:
             return self._vector
 
@@ -53,31 +56,29 @@ class _TaskVector(abc.ABC):
             return self.vector[key]
 
         if key in self._cache:
-            print(f"Cache hit for key {key}")
             return self._cache[key]  # Cache hit
 
-        print(f"Cache miss for key {key}")
-
-        # Else access the vector and update the cache
-        vector = self.vector  # Loads from disk
+        # Cache miss: load the vector (applies _transform_fn if set)
+        vector = self.vector
         self._cache = {}  # Reset the cache
 
-        # Update the cache to include next `self.cache_window` keys
-        # 1. Get all keys from the vector source
-        all_keys = list(vector.keys())
-        try:
-            start_idx = all_keys.index(key)
-        except ValueError:
+        if self._transform_fn is not None:
+            # The transform operates on the full dict and we already have it in memory,
+            # so cache everything to avoid redundant disk loads + re-transforms.
+            self._cache = dict(vector)
+        else:
+            # Window caching: keep next `cache_window` keys to limit memory use.
+            all_keys = list(vector.keys())
+            try:
+                start_idx = all_keys.index(key)
+            except ValueError:
+                raise KeyError(f"Key {key} not found in vector.")
+            end_idx = start_idx + self.cache_window
+            for k in all_keys[start_idx:end_idx]:
+                self._cache[k] = vector[k]
+
+        if key not in self._cache:
             raise KeyError(f"Key {key} not found in vector.")
-
-        # 2. Slice from current key to (start_idx + cache_window)
-        end_idx = start_idx + self.cache_window
-        keys_to_cache = all_keys[start_idx:end_idx]
-
-        # 3. Bulk update the cache
-        for k in keys_to_cache:
-            self._cache[k] = vector[k]
-
         return self._cache[key]
 
     def _build_vector(self):
@@ -202,85 +203,21 @@ class _TaskVector(abc.ABC):
 
     def map(self, fn):
         """Map a function over the task vector."""
+        if self.lazy:
+            existing = self._transform_fn
+            composed = (lambda v: fn(existing(v))) if existing is not None else fn
+            return self.__class__(
+                pretrained_checkpoint=self._pretrained_checkpoint,
+                finetuned_checkpoint=self._finetuned_checkpoint,
+                lazy=True,
+                covariance_path=self.covariance_path,
+                _transform_fn=composed,
+            )
         with torch.no_grad():
             return self.__class__(
                 vector=fn(self.vector),
                 covariance_path=self.covariance_path,
-                lazy=self.lazy,
+                lazy=False,
             )
 
 
-class NonLinearTaskVector(_TaskVector):
-    """A task vector for nonlinear models."""
-
-    def _load_checkpoint(self, checkpoint):
-        """Load a checkpoint into a model."""
-        return torch.load(checkpoint, map_location="cpu", weights_only=False)
-
-    def apply_to_nonlinear(self, pretrained_nonlinear_checkpoint, scaling_coef=1.0):
-        """Apply a task vector to a nonlinear pretrained model."""
-        return self.apply_to(pretrained_nonlinear_checkpoint, scaling_coef)
-
-    def apply_to_linear(self, pretrained_linear_checkpoint, scaling_coef=1.0):
-        """Apply a task vector to a linear pretrained model."""
-        return nonlinear_to_linear(self).apply_to(
-            pretrained_linear_checkpoint, scaling_coef
-        )
-
-    def _cast_to_same_type(self, other):
-        return linear_to_nonlinear(other, self.vector.keys())
-
-
-class LinearizedTaskVector(_TaskVector):
-    """A task vector for linearized models."""
-
-    def _load_checkpoint(self, checkpoint):
-        """Load a checkpoint into a model."""
-        return LinearizedImageEncoder.load(checkpoint)
-
-    def apply_to_nonlinear(
-        self, pretrained_nonlinear_checkpoint, param_names, scaling_coef=1.0
-    ):
-        """Apply a task vector to a nonlinear pretrained model."""
-        return linear_to_nonlinear(self, param_names).apply_to(
-            pretrained_nonlinear_checkpoint, scaling_coef
-        )
-
-    def apply_to_linear(self, pretrained_linear_checkpoint, scaling_coef=1.0):
-        """Apply a task vector to a linear pretrained model."""
-        return self.apply_to(pretrained_linear_checkpoint, scaling_coef)
-
-    def get_named_parameters(self, param_names):
-        """Get the named parameters of the task vector."""
-        params = {k: v for k, v in self.vector.items() if "model.params0" not in k}
-        return {k: v for k, v in zip(param_names, params.values())}
-
-    def _cast_to_same_type(self, other):
-        return nonlinear_to_linear(other)
-
-
-def nonlinear_to_linear(nonlinear_task_vector):
-    """Convert a nonlinear task vector to a linear task vector."""
-    if isinstance(nonlinear_task_vector, LinearizedTaskVector):
-        return nonlinear_task_vector
-    else:
-        linear_params = {
-            f"model.params.{i}": v
-            for i, v in enumerate(nonlinear_task_vector.vector.values())
-        }
-        # The diff of the init params of the linearized moodels are all zero.
-        linear_params |= {
-            f"model.params0.{i}": torch.zeros_like(v)
-            for i, v in enumerate(nonlinear_task_vector.vector.values())
-        }
-        return LinearizedTaskVector(vector=linear_params)
-
-
-def linear_to_nonlinear(linear_task_vector, param_names):
-    """Convert a linear task vector to a nonlinear task vector."""
-    if isinstance(linear_task_vector, NonLinearTaskVector):
-        return linear_task_vector
-    else:
-        return NonLinearTaskVector(
-            vector=linear_task_vector.get_named_parameters(param_names)
-        )

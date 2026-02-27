@@ -3,11 +3,11 @@ import torch
 import tqdm
 
 from src import utils
-from src.datasets.common import get_dataloader, maybe_dictionarize
-from src.datasets.registry import get_dataset
-from src.heads import get_classification_head
-from src.linearize import LinearizedImageEncoder
-from src.modeling import ImageClassifier
+from src.vision.datasets.common import get_dataloader, maybe_dictionarize
+from src.vision.datasets.registry import get_dataset
+from src.vision.heads import get_classification_head
+from src.vision.linearize import LinearizedImageEncoder
+from src.vision.modeling import ImageClassifier
 
 
 def eval_single_dataset(image_encoder, dataset_name, args):

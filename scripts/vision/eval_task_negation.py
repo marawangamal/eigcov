@@ -1,11 +1,10 @@
 import json
 import os
 
-from utils import find_optimal_coef
-
 from src.args import parse_arguments
-from src.eval import evaluate_task_vector, evaluate_task_vector_at_coef
-from src.task_vectors import LinearizedTaskVector, NonLinearTaskVector
+from src.vision.eval import evaluate_task_vector, evaluate_task_vector_at_coef
+from src.vision.task_vectors import LinearizedTaskVector, NonLinearTaskVector
+from src.utils import find_optimal_coef
 
 args = parse_arguments()
 

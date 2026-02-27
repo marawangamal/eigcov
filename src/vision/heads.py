@@ -4,9 +4,9 @@ import open_clip
 import torch
 from tqdm import tqdm
 
-from src.datasets.registry import get_dataset
-from src.datasets.templates import get_templates
-from src.modeling import ClassificationHead, ImageEncoder
+from src.vision.datasets.registry import get_dataset
+from src.vision.datasets.templates import get_templates
+from src.vision.modeling import ClassificationHead, ImageEncoder
 
 
 def build_classification_head(model, dataset_name, template, data_location, device):

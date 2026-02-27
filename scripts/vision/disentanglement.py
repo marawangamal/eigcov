@@ -9,8 +9,8 @@ import os
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
-from src.task_vectors import NonLinearTaskVector, LinearizedTaskVector
-from src.eval import eval_single_dataset
+from src.vision.task_vectors import NonLinearTaskVector, LinearizedTaskVector
+from src.vision.eval import eval_single_dataset
 from src.args import parse_arguments
 
 
@@ -83,9 +83,9 @@ def compute_disentanglement_error(
 
 def compute_prediction_disagreement(encoder_a, encoder_b, dataset, args):
     """Fraction of test samples where two encoders give different predictions."""
-    from src.heads import get_classification_head
-    from src.modeling import ImageClassifier
-    from src.datasets.registry import get_dataset
+    from src.vision.heads import get_classification_head
+    from src.vision.modeling import ImageClassifier
+    from src.vision.datasets.registry import get_dataset
 
     classification_head = get_classification_head(args, dataset)
 

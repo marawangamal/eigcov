@@ -7,13 +7,14 @@ def setup_ddp(rank, world_size, port=12357):
     os.environ["MASTER_ADDR"] = "localhost"
     os.environ["MASTER_PORT"] = str(port)
 
+    torch.cuda.set_device(rank)
     # initialize the process group
     torch.distributed.init_process_group(
         "nccl",
         rank=rank,
         world_size=world_size,
+        device_id=torch.device(f"cuda:{rank}"),
     )
-    torch.cuda.set_device(rank)
     torch.distributed.barrier()
 
 

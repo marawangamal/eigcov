@@ -14,9 +14,9 @@ import torch
 import numpy as np
 from collections import OrderedDict
 
-from src.task_vectors import NonLinearTaskVector
+from src.vision.task_vectors import NonLinearTaskVector
 from src.args import parse_arguments
-from src.datasets.registry import get_dataset
+from src.vision.datasets.registry import get_dataset
 
 
 def register_hooks(model):

@@ -1,0 +1,57 @@
+====================================================================================================
+Fine-tuning t5-base on qasc (standard)
+====================================================================================================
+Building model and tokenizer.
+Saving model to /network/scratch/m/marawan.gamal/eigcov/checkpoints/language/qasc/zeroshot.pt
+/home/mila/m/marawan.gamal/scratch/eigcov/src/language/finetune.py:93: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.
+  scaler = torch.cuda.amp.GradScaler(enabled=True)
+Train Iteration: 0 [0% 0/75000] Loss: 0.421132  Data (t) 67.004 Batch (t) 68.167
+Train Iteration: 100 [0% 100/75000]     Loss: 0.057874  Data (t) 0.349  Batch (t) 0.773
+Train Iteration: 200 [0% 200/75000]     Loss: 0.029724  Data (t) 0.365  Batch (t) 0.819
+Train Iteration: 300 [0% 300/75000]     Loss: 0.014934  Data (t) 0.384  Batch (t) 0.838
+
+Train Iteration: 400 [1% 400/75000]     Loss: 0.006854  Data (t) 0.034  Batch (t) 0.453
+Train Iteration: 500 [1% 500/75000]     Loss: 0.023548  Data (t) 0.384  Batch (t) 0.921
+Train Iteration: 600 [1% 600/75000]     Loss: 0.007000  Data (t) 0.411  Batch (t) 0.941
+Train Iteration: 700 [1% 700/75000]     Loss: 0.007206  Data (t) 0.390  Batch (t) 0.830
+Train Iteration: 800 [1% 800/75000]     Loss: 0.007036  Data (t) 0.034  Batch (t) 0.464
+Train Iteration: 900 [1% 900/75000]     Loss: 0.002411  Data (t) 0.351  Batch (t) 0.859
+Train Iteration: 1000 [1% 1000/75000]   Loss: 0.001936  Data (t) 0.371  Batch (t) 0.855
+Train Iteration: 1100 [1% 1100/75000]   Loss: 0.000750  Data (t) 0.382  Batch (t) 0.830
+Train Iteration: 1200 [2% 1200/75000]   Loss: 0.001953  Data (t) 0.034  Batch (t) 0.438
+Train Iteration: 1300 [2% 1300/75000]   Loss: 0.001872  Data (t) 0.347  Batch (t) 0.926
+Train Iteration: 1400 [2% 1400/75000]   Loss: 0.001103  Data (t) 0.377  Batch (t) 0.842
+Train Iteration: 1500 [2% 1500/75000]   Loss: 0.001971  Data (t) 0.386  Batch (t) 0.864
+Train Iteration: 1600 [2% 1600/75000]   Loss: 0.000406  Data (t) 0.034  Batch (t) 0.477
+Train Iteration: 1700 [2% 1700/75000]   Loss: 0.000336  Data (t) 0.379  Batch (t) 0.858
+Train Iteration: 1800 [2% 1800/75000]   Loss: 0.002097  Data (t) 0.366  Batch (t) 0.857
+Train Iteration: 1900 [3% 1900/75000]   Loss: 0.001827  Data (t) 0.391  Batch (t) 0.857
+Train Iteration: 2000 [3% 2000/75000]   Loss: 0.001213  Data (t) 0.034  Batch (t) 0.469
+Train Iteration: 2100 [3% 2100/75000]   Loss: 0.001563  Data (t) 0.370  Batch (t) 0.877
+Train Iteration: 2200 [3% 2200/75000]   Loss: 0.000614  Data (t) 0.381  Batch (t) 0.895
+Train Iteration: 2300 [3% 2300/75000]   Loss: 0.001934  Data (t) 0.371  Batch (t) 0.868
+Train Iteration: 2400 [3% 2400/75000]   Loss: 0.001502  Data (t) 0.034  Batch (t) 0.498
+Train Iteration: 2500 [3% 2500/75000]   Loss: 0.002460  Data (t) 0.367  Batch (t) 0.812
+Train Iteration: 2600 [3% 2600/75000]   Loss: 0.002166  Data (t) 0.375  Batch (t) 0.795
+
+
+
+ in the old codebase running t5-base i see prints like this:  1%|█                                                                                                        
+                                                  | 1999/300000 [2:00:57<290:36:08,  3.51s/it]INFO:root:Evaluating checkpoint                                              
+  DEBUG: fields_toIterateOver ['split', 'inference_dataset']                                                                                                               
+  DEBUG: prediction_dir exp_out/training/t5-base/qasc/predictions/batch_499 | split validation | dataset qasc | template_idx 0                                             
+  INFO:root:      Evaluating model on qasc dataset                                                                                                                         
+  1it [00:00,  2.49it/s]                                                                                                                                                   
+  INFO:root:Finished 499 batches with log {'batch_idx': 499, 'loss': 0.001, 'validation': {'qasc': {'accuracy': 1.0, 'average': 1.0}, 'average': 1.0},                     
+  'score_to_select_checkpoint': 1.0}                                                                                                                                       
+    1%|█▏                                                                                                                                                      |           
+  2399/300000 [2:25:04<298:16:03,  3.61s/it]INFO:root:Evaluating checkpoint                                                                                                
+  DEBUG: fields_toIterateOver ['split', 'inference_dataset']                                                                                                               
+  DEBUG: prediction_dir exp_out/training/t5-basepredictions/batch_599 | split validation | dataset qasc | template_idx 0                                                   
+  INFO:root:      Evaluating model on qasc dataset                                                                                                                         
+  1it [00:00,  2.56it/s]                                                                                                                                                   
+  INFO:root:Finished 599 batches with log {'batch_idx': 599, 'loss': 0.001, 'validation': {'qasc': {'accuracy': 1.0, 'average': 1.0}, 'average': 1.0},                     
+  'score_to_select_checkpoint': 1.0}                                                                                                                                       
+    1%|█▏                                                                                                                                                      |           
+  2399/300000 [2:25:10<300:08:22,  3.63s/it]                                                                                                                               
+  (.venv) marawan.gamal@cn-c036:~/scratch/ties$ whereas for us we have    

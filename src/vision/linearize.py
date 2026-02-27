@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 from functorch import jvp, make_functional_with_buffers
 
-from src.modeling import ImageEncoder
+from src.vision.modeling import ImageEncoder
 from src.utils import DotDict
 
 
@@ -54,11 +54,16 @@ class LinearizedModel(nn.Module):
     def __call__(self, x) -> torch.Tensor:
         """Computes the linearized model output using a first-order Taylor decomposition."""
         dparams = [p - p0 for p, p0 in zip(self.params, self.params0)]
-        out, dp = jvp(
-            lambda param: self.func0(param, x),
-            (tuple(self.params0),),
-            (tuple(dparams),),
-        )
+        # Forward-mode AD (jvp) is not supported by the efficient/flash attention
+        # kernels, so fall back to the math backend which does support it.
+        with torch.backends.cuda.sdp_kernel(
+            enable_flash=False, enable_math=True, enable_mem_efficient=False
+        ):
+            out, dp = jvp(
+                lambda param: self.func0(param, x),
+                (tuple(self.params0),),
+                (tuple(dparams),),
+            )
         return out + dp
 
 
