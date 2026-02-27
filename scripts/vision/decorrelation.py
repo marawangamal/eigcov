@@ -10,14 +10,15 @@ K = 32 (i,j) pairs, randomly sampled with a fixed seed for reproducibility.
 
 Example usage:
 export PYTHONPATH="$PYTHONPATH:$PWD"
-python scripts/decorrelation_offline.py --model=ViT-B-16 --openclip-cachedir=$SCRATCH/openclip --data-location=$SLURM_TMPDIR/datasets
+python scripts/vision/decorrelation.py --model=ViT-B-16 --openclip-cachedir=$SCRATCH/openclip --data-location=$SLURM_TMPDIR/datasets --finetuning-mode=lora
 """
 
+# TODO: rename to correlation.py
 import os
 import torch
 import numpy as np
 
-from src.vision.task_vectors import NonLinearTaskVector
+from src.vision.task_vectors import LinearizedTaskVector, NonLinearTaskVector
 from src.vision.heads import get_classification_head
 from src.vision.modeling import ImageClassifier
 from src.args import parse_arguments
@@ -112,9 +113,6 @@ if __name__ == "__main__":
     args.batch_size = 1
     args.save = f"checkpoints/{args.model}"
 
-    results_dir = f"results/{args.model}"
-    os.makedirs(results_dir, exist_ok=True)
-
     tasks = [
         "Cars",
         "DTD",
@@ -126,18 +124,59 @@ if __name__ == "__main__":
         "SVHN",
     ]
     pretrained_ckpt = f"checkpoints/{args.model}/{tasks[0]}Val/zeroshot.pt"
+    decorrelation_dir = f"results/{args.model}/decorrelations_ft{args.finetuning_mode}"
+    os.makedirs(decorrelation_dir, exist_ok=True)
 
     for task in tasks:
-        cache_path = f"{results_dir}/decorrelation_{task}.npz"
+        cache_path = f"{decorrelation_dir}/correlation_{task}.npz"
         if os.path.exists(cache_path) and not args.overwrite:
             print(f"Skipping {task} (cached)")
             continue
 
-        print(f"\nCollecting norms for {task}")
-        tv = NonLinearTaskVector(
-            pretrained_ckpt, f"checkpoints/{args.model}/{task}Val/finetuned.pt"
-        )
-        encoder = tv.apply_to(pretrained_ckpt, scaling_coef=1.0)
+        # print(f"\nCollecting norms for {task}")
+        # tv = NonLinearTaskVector(
+        #     pretrained_ckpt, f"checkpoints/{args.model}/{task}Val/finetuned.pt"
+        # )
+        # encoder = tv.apply_to(pretrained_ckpt, scaling_coef=1.0)
+        # del tv
+
+        print(f"\nCollecting covariance for {task}")
+        if args.finetuning_mode == "linear":
+            pretrained_checkpoint = f"{args.save}/{task}Val/linear_zeroshot.pt"
+            finetuned_checkpoint = f"{args.save}/{task}Val/linear_finetuned.pt"
+            pretrained_nonlinear_checkpoint = f"{args.save}/{task}Val/zeroshot.pt"
+
+            # Get param names
+            nonlinear_encoder = torch.load(
+                pretrained_nonlinear_checkpoint, map_location="cpu", weights_only=False
+            )
+            param_names = [n for n, _ in nonlinear_encoder.named_parameters()]
+            del nonlinear_encoder
+
+            tv = LinearizedTaskVector(
+                pretrained_checkpoint,
+                finetuned_checkpoint,
+            )
+            encoder = tv.apply_to_nonlinear(
+                pretrained_nonlinear_checkpoint, param_names, scaling_coef=1.0
+            )
+        elif args.finetuning_mode == "lora":
+            pretrained_checkpoint = f"{args.save}/{task}Val/zeroshot.pt"
+            finetuned_checkpoint = f"{args.save}/{task}Val/lora_finetuned.pt"
+            tv = NonLinearTaskVector(
+                pretrained_checkpoint,
+                finetuned_checkpoint,
+            )
+            encoder = tv.apply_to(pretrained_checkpoint, scaling_coef=1.0)
+        else:
+            pretrained_checkpoint = f"{args.save}/{task}Val/zeroshot.pt"
+            finetuned_checkpoint = f"{args.save}/{task}Val/finetuned.pt"
+            tv = NonLinearTaskVector(
+                pretrained_checkpoint,
+                finetuned_checkpoint,
+            )
+            encoder = tv.apply_to(pretrained_checkpoint, scaling_coef=1.0)
+
         del tv
 
         g_sq, aat_samples, index_pairs = collect_norms(encoder, f"{task}Val", args)
