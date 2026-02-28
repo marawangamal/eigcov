@@ -1,9 +1,38 @@
-# Finetune using "standard", "lora", "linear" finetuning modes
-for ft in standard lora linear; do
+#!/bin/bash
+#SBATCH --job-name=finetune_vision_models
+#SBATCH --gres=gpu:rtx8000:1
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=32G
+#SBATCH --time=08:00:00
+#SBATCH --output=logs/%x_%j.out
+#SBATCH --error=logs/%x_%j.err
+
+set -euo pipefail
+mkdir -p logs
+
+# 0. Setup environment
+source "$SCRATCH/eigcov/.venv/bin/activate"
+export PYTHONPATH="$PYTHONPATH:$PWD"
+export SSL_CERT_DIR=/etc/ssl/certs
+
+cp vit_datasets_08.zip "$SLURM_TMPDIR/"
+unzip -q "$SLURM_TMPDIR/vit_datasets_08.zip" -d "$SLURM_TMPDIR/"
+
+MODELS=(ViT-B-16 ViT-B-32 ViT-L-14)
+FT_MODES=(standard lora linear)
+
+for MODEL in "${MODELS[@]}"; do
+  for FT_MODE in "${FT_MODES[@]}"; do
+
+    # 1. Finetune model
+    echo "[BASH] Running finetune.py | model: $MODEL | ft mode: $FT_MODE"
     python scripts/vision/finetune.py \
-    --finetuning-mode="$ft" \
-    --model=ViT-B-16 \
+    --finetuning-mode="$FT_MODE" \
+    --model="$MODEL" \
     --world-size=1 \
     --num-workers=1 \
-    --openclip-cachedir=$SCRATCH/openclip \
-    --data-location=$SLURM_TMPDIR/datasets
+    --openclip-cachedir="$SCRATCH/openclip" \
+    --data-location="$SLURM_TMPDIR/datasets"
+
+  done
+done
