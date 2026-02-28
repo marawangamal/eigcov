@@ -1,12 +1,10 @@
 import os
 import time
 
-import numpy as np
 import torch
-import torch.nn.functional as F
 
 
-# --finetuning-mode=standard   --model=ViT-B-16   --world-size=1   --num-workers=1   --openclip-cachedir=$SCRATCH/openclip   --data-location=datasets   --save=$SCRATCH/eigcov/checkpoints/vision   --cosine-samples=128
+# --finetuning-mode=standard   --model=ViT-B-16   --world-size=1   --num-workers=1   --openclip-cachedir=$SCRATCH/openclip   --data-location=datasets   --save=$SCRATCH/eigcov/checkpoints/vision
 from src.args import parse_arguments
 from src.vision.datasets.common import get_dataloader, maybe_dictionarize
 from src.vision.datasets.registry import get_dataset
@@ -169,55 +167,6 @@ def finetune(rank, args):
         )
         ddp_model.module.image_encoder.save(model_path)
 
-    # --- Cosine similarity tracking setup ---
-    # We fix _grad_0 to the first gradient computed and track cos(grad_k, grad_0)
-    # over training. At step 0, grad_k == grad_0 so cosine similarity starts at 1.
-    _cosine_hooks = []
-    _grad_0 = None  # fixed reference: first gradient snapshot
-    _grad_k = None  # current gradient snapshot (updated each optimizer step)
-    _cosine_sim_log = []  # list of (step, cos_sim)
-    _last_cos_sim = float("nan")
-
-    if args.cosine_samples > 0 and is_main_process():
-        param_offsets = []
-        offset = 0
-        for p in params:
-            param_offsets.append((offset, offset + p.numel(), p))
-            offset += p.numel()
-        total_grad_elements = offset
-
-        _sampled_indices = torch.randperm(total_grad_elements)[: args.cosine_samples]
-        _grad_k = torch.zeros(args.cosine_samples)
-
-        # For each parameter, register a hook that writes the sampled gradient
-        # elements into _grad_k. _sampled_indices are global flat indices across
-        # the concatenation of all parameters; here we find which ones fall in
-        # this parameter's slice [start, end), convert them to local indices, and
-        # accumulate grad.flatten()[local_idxs] into the corresponding slots of
-        # _grad_k. After each optimizer step, _grad_k holds a sampled snapshot of
-        # the gradient. += is used (not =) so that when num_grad_accumulation > 1,
-        # _grad_k accumulates across micro-steps, mirroring .grad accumulation.
-        for start, end, p in param_offsets:
-            mask = (_sampled_indices >= start) & (_sampled_indices < end)
-            if not mask.any():
-                continue
-            positions = torch.where(mask)[0]  # slots in _grad_k to write to
-            local_idxs = _sampled_indices[positions] - start  # within-parameter indices
-
-            def _make_hook(pos, lidxs):
-                def _hook(grad):
-                    _grad_k[pos] += grad.detach().flatten()[lidxs].cpu()
-
-                return _hook
-
-            _cosine_hooks.append(p.register_hook(_make_hook(positions, local_idxs)))
-
-    # If tracking cosine similarity, fix a single batch so gradients are
-    # deterministic — with lr=0 this should give cos sim = 1 every step.
-    _fixed_batch = None
-    if args.cosine_samples > 0 and is_main_process():
-        _fixed_batch = maybe_dictionarize(next(iter(ddp_loader)))
-
     run_start_time = time.perf_counter()
     for epoch in range(args.epochs):
         ddp_model.train()
@@ -230,7 +179,7 @@ def finetune(rank, args):
                 + epoch * num_batches // args.num_grad_accumulation
             )
 
-            batch = _fixed_batch if _fixed_batch is not None else maybe_dictionarize(batch)
+            batch = maybe_dictionarize(batch)
             inputs = batch["images"].cuda()
             labels = batch["labels"].cuda()
             data_time = time.time() - start_time
@@ -246,17 +195,6 @@ def finetune(rank, args):
 
                 torch.nn.utils.clip_grad_norm_(params, 1.0)
                 optimizer.step()
-
-                if args.cosine_samples > 0 and is_main_process():
-                    if _grad_0 is None:
-                        _grad_0 = _grad_k.clone()  # fix reference at first step
-                    if _grad_0.norm() > 0 and _grad_k.norm() > 0:
-                        _last_cos_sim = F.cosine_similarity(
-                            _grad_k.unsqueeze(0), _grad_0.unsqueeze(0)
-                        ).item()
-                        _cosine_sim_log.append((step, _last_cos_sim))
-                    _grad_k.zero_()
-
                 optimizer.zero_grad()
 
             batch_time = time.time() - start_time
@@ -282,27 +220,12 @@ def finetune(rank, args):
             ):
                 percent_complete = 100 * i / len(ddp_loader)
                 run_elapsed = time.perf_counter() - run_start_time
-                cos_str = (
-                    f"\tCos sim {_last_cos_sim:.4f}" if args.cosine_samples > 0 else ""
-                )
                 print(
                     f"Train Epoch: {epoch}/{args.epochs} [{percent_complete:.0f}% {i}/{len(dataset.train_loader)}]\t"  # noqa: E501
                     f"Loss: {loss.item():.6f}\tData (t) {data_time:.3f}\tBatch (t) {batch_time:.3f}\t"  # noqa: E501
-                    f"Elapsed {_format_duration(run_elapsed)}{cos_str}",  # noqa: E501
+                    f"Elapsed {_format_duration(run_elapsed)}",  # noqa: E501
                     flush=True,
                 )
-
-    # Cosine sim cleanup and save
-    if args.cosine_samples > 0 and is_main_process():
-        for h in _cosine_hooks:
-            h.remove()
-        if _cosine_sim_log and args.save is not None:
-            steps_arr, sims_arr = zip(*_cosine_sim_log)
-            np.savez(
-                os.path.join(ckpdir, "cosine_sim.npz"),
-                steps=np.array(steps_arr),
-                cosine_sim_to_grad0=np.array(sims_arr),
-            )
 
     # FIXME: Make this work with DDP.
     if is_main_process():
@@ -354,28 +277,29 @@ if __name__ == "__main__":
     }
 
     args = parse_arguments()
+
+    # Append model name to save directory
+    if args.save is None:
+        args.save = f"checkpoints/{args.model}"
+    else:
+        args.save = os.path.join(args.save, args.model)
+
+    # Append seed to save directory
+    if args.seed is not None:
+        args.save = os.path.join(args.save, f"seed_{args.seed}")
+
     if args.train_dataset is not None:
         train_datasets = [ds.strip() for ds in args.train_dataset]
 
     for dataset in train_datasets:
         # HACK: Some command line arguments are overwritten by defaults here.
-        # args.lr = 1e-5
-        args.epochs = 5 if args.cosine_samples > 0 else epochs[dataset]
+        args.lr = 1e-5
+        args.epochs = epochs[dataset]
         args.train_dataset = dataset + "Val"
 
         # We use gradient accumulation to simulate larger batch sizes if the model does not fit in memory.
         args.batch_size = 64 if args.model == "ViT-L-14" else 128
         args.num_grad_accumulation = 2 if args.model == "ViT-L-14" else 1
-
-        # Append model name to save directory
-        if args.save is None:
-            args.save = f"checkpoints/{args.model}"
-        else:
-            args.save = os.path.join(args.save, args.model)
-
-        # Append seed to save directory
-        if args.seed is not None:
-            args.save = os.path.join(args.save, f"seed_{args.seed}")
 
         print("=" * 100)
         print(f"Fine-tuning {args.model} on {dataset} ({args.finetuning_mode})")

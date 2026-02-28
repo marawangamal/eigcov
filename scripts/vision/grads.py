@@ -123,20 +123,21 @@ if __name__ == "__main__":
     ]
 
     args = parse_arguments()
+
+    # Append model name and seed to save directory once, before the loop
+    if args.save is None:
+        args.save = f"checkpoints/{args.model}"
+    else:
+        args.save = os.path.join(args.save, args.model)
+    if args.seed is not None:
+        args.save = os.path.join(args.save, f"seed_{args.seed}")
+
     if args.train_dataset is not None:
         train_datasets = [ds.strip() for ds in args.train_dataset]
 
     for dataset in train_datasets:
         args.train_dataset = dataset + "Val"
         args.batch_size = 64 if args.model == "ViT-L-14" else 128
-
-        if args.save is None:
-            args.save = f"checkpoints/{args.model}"
-        else:
-            args.save = os.path.join(args.save, args.model)
-
-        if args.seed is not None:
-            args.save = os.path.join(args.save, f"seed_{args.seed}")
 
         print("=" * 100)
         print(
