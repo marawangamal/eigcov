@@ -1,5 +1,6 @@
 """Append-only results database backed by a JSON lines file."""
 
+import hashlib
 import json
 import os
 from datetime import datetime
@@ -13,8 +14,14 @@ def args_to_dict(args):
     }
 
 
-def record_exists(db_path, record):
-    """Return True if a record matching all fields of `record` (except timestamp) exists."""
+def make_run_hash(script, args):
+    """Stable hash of (script, args) used to identify a unique run."""
+    payload = json.dumps({"script": script, **args_to_dict(args)}, sort_keys=True)
+    return hashlib.sha256(payload.encode()).hexdigest()[:16]
+
+
+def record_exists(db_path, run_hash):
+    """Return True if any record with the given run_hash exists in the DB."""
     if not os.path.exists(db_path):
         return False
     with open(db_path) as f:
@@ -22,13 +29,12 @@ def record_exists(db_path, record):
             line = line.strip()
             if not line:
                 continue
-            existing = json.loads(line)
-            if all(existing.get(k) == v for k, v in record.items() if k != "timestamp"):
+            if json.loads(line).get("run_hash") == run_hash:
                 return True
     return False
 
 
-def append_result(db_path, record):
+def append_result(db_path, record, run_hash):
     """Append one result record to a JSON lines file.
 
     Each line is a self-contained JSON object.  Load the whole file with:
@@ -36,6 +42,6 @@ def append_result(db_path, record):
         df = pd.read_json(db_path, lines=True)
     """
     os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)
-    record = {"timestamp": datetime.now().isoformat(), **record}
+    record = {"run_hash": run_hash, "timestamp": datetime.now().isoformat(), **record}
     with open(db_path, "a") as f:
         f.write(json.dumps(record) + "\n")

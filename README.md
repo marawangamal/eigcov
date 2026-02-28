@@ -64,8 +64,8 @@ unzip -q $SLURM_TMPDIR/vit_datasets_08.zip -d $SLURM_TMPDIR/
 
 ```sh
 python scripts/vision/finetune.py \
-  --finetuning-mode=linear \
-  --model=ViT-B-16 \
+  --finetuning-mode=lora \
+  --model=ViT-B-32 \
   --world-size=1 \
   --num-workers=1 \
   --openclip-cachedir=$SCRATCH/openclip \
@@ -74,31 +74,24 @@ python scripts/vision/finetune.py \
 
 Options for `--finetuning-mode`: `standard`, `lora`, `linear`, `posthoc`.
 
-### 2. Evaluate single task zeroshot / standard / linear
+### 2. Evaluate single task (zeroshot / standard / linear / lora)
 
 ```sh
 python scripts/vision/eval_single_task.py \
-  --finetuning-mode=standard \
-  --model=ViT-B-16 \
+  --finetuning-mode=lora \
+  --model=ViT-B-32 \
   --openclip-cachedir=$SCRATCH/openclip \
   --data-location=$SLURM_TMPDIR/datasets
-
-python scripts/vision/eval_single_task.py \
-  --finetuning-mode=linear \
-  --model=ViT-B-16 \
-  --openclip-cachedir=$SCRATCH/openclip \
-  --data-location=$SLURM_TMPDIR/datasets
-
 ```
 
 ### 3. Collect covariance matrices
 
 ```sh
 python scripts/vision/covariance.py \
-  --model=ViT-B-16 \
+  --model=ViT-B-32 \
   --cov-split=train \
   --cov-num-batches=10 \
-  --cov-batch-size=1 \
+  --cov-batch-size=32 \
   --mha=split \
   --cov-type=sm \
   --cov-estimator=full

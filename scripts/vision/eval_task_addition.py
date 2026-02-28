@@ -4,7 +4,7 @@ import os
 # from mha import copy_from_pytorch_state_dict, copy_to_pytorch_state_dict
 from src import mhap, mhas
 from src.args import parse_arguments
-from src.results_db import append_result, args_to_dict, record_exists
+from src.results_db import append_result, args_to_dict, make_run_hash, record_exists
 from src.vision.eval import evaluate_task_vector, evaluate_task_vector_at_coef
 from src.merging import combine_task_vectors
 from src.vision.task_vectors import LinearizedTaskVector, NonLinearTaskVector
@@ -17,11 +17,10 @@ if args.seed is not None:
 else:
     args.save = f"checkpoints/{args.model}"
 
-if args.results_db:
-    _rec = {"script": "eval_task_addition", **args_to_dict(args)}
-    if record_exists(args.results_db, _rec):
-        print(f"Skipping: matching record already exists in {args.results_db}")
-        exit(0)
+_run_hash = make_run_hash("eval_task_addition", args) if args.results_db else None
+if args.results_db and record_exists(args.results_db, _run_hash):
+    print(f"Skipping: matching record already exists in {args.results_db}")
+    exit(0)
 
 
 print("*" * 100)
@@ -197,5 +196,6 @@ if args.results_db:
             **{f"test_{k}": v for k, v in test_metrics.items()},
             **{f"val_{k}": v for k, v in val_metrics.items()},
         },
+        _run_hash,
     )
     print("Results appended to", args.results_db)
