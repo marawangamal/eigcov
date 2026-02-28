@@ -53,7 +53,7 @@ def parse_arguments():
         default=1,
         help="Number of gradient accumulation steps.",
     )
-    parser.add_argument("--lr", type=float, default=0.001, help="Learning rate.")
+    parser.add_argument("--lr", type=float, default=1e-5, help="Learning rate.")
     parser.add_argument("--wd", type=float, default=0.1, help="Weight decay")
     parser.add_argument("--ls", type=float, default=0.0, help="Label smoothing.")
     parser.add_argument(

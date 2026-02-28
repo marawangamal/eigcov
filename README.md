@@ -1,5 +1,8 @@
 # Covariance Estimation using Task Matrices
 
+## TODO
+- [ ] Move src/args.py => src/vision/args.py
+
 ## Setup
 
 ```sh
@@ -16,12 +19,13 @@ unzip -q $SLURM_TMPDIR/vit_datasets_08.zip -d $SLURM_TMPDIR/
 
 ```sh
 python scripts/vision/finetune.py \
-  --finetuning-mode=lora \
-  --model=ViT-B-32 \
+  --finetuning-mode=standard \
+  --model=ViT-B-16 \
   --world-size=1 \
   --num-workers=1 \
   --openclip-cachedir=$SCRATCH/openclip \
-  --data-location=$SLURM_TMPDIR/datasets
+  --data-location=$SLURM_TMPDIR/datasets \
+  --save=$SCRATCH/eigcov/checkpoints/vision 
 ```
 
 Options for `--finetuning-mode`: `standard`, `lora`, `linear`, `posthoc`.
@@ -52,7 +56,9 @@ python scripts/vision/eval_task_addition.py \
   --coeff-start=0 --n-eval-points=11
 ```
 
-### 4. Generate covariance matrices (only required for RegMean)
+## Scripts 
+
+### Generate covariance matrices (only required for RegMean)
 ```sh
 python scripts/vision/covariance.py \
   --model=ViT-B-32 \
@@ -66,11 +72,24 @@ python scripts/vision/covariance.py \
 **NOTE:** `--mha`: `split` Splits q,k,v into separate linear modules so their activation covariances can be collected (otherwise will be ignored).
 
 
-## Reproducing Vision Experiments
+### Reproducing Vision Experiments
 To reproduce vision experiments simply run the following commands. The results will be saved to `results/results.jsonl`
 ```sh
 bash scripts/vision/train.sh
 bash scripts/vision/eval.sh
+```
+
+### Reproducing gradient orientation experiments
+```sh
+python scripts/vision/finetune.py \
+  --finetuning-mode=standard \
+  --model=ViT-B-16 \
+  --world-size=1 \
+  --num-workers=1 \
+  --openclip-cachedir=$SCRATCH/openclip \
+  --data-location=$SLURM_TMPDIR/datasets \
+  --save=$SCRATCH/eigcov/checkpoints/vision \
+  --cosine-samples=128
 ```
 
 ## Language Experiments
