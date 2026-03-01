@@ -99,14 +99,14 @@ python scripts/vision/finetune.py \
 python scripts/language/finetune.py \
   --finetuning-mode=standard \
   --model=t5-base \
-  --save=$SCRATCH/eigcov/checkpoints/language \
+  --save=$SCRATCH/eigcov/checkpoints \
   --hf-cache-dir=$SCRATCH/hf_cache
 ```
 
 ### 2. Evaluate single model (zeroshot / standard / linear / lora)
 ```sh
 python scripts/language/eval_single_task.py \
---finetuning-mode=standard  --save=$SCRATCH/eigcov/checkpoints/language
+--finetuning-mode=standard  --save=$SCRATCH/eigcov/checkpoints
 ```
 
 ### 3. Evaluate merged models

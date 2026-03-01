@@ -16,7 +16,7 @@ TensorMergeFn = Callable[[str, Sequence[torch.Tensor]], torch.Tensor]
 
 
 def combine_task_vectors(
-    vectors: Sequence[_TaskVector], merge: str, args: Namespace
+    vectors: Sequence[_TaskVector], merge: str, *args, **kwargs
 ) -> _TaskVector:
     """Generic combiner for task vectors.
 
