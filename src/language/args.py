@@ -9,8 +9,8 @@ def parse_arguments():
     parser.add_argument(
         "--model",
         type=str,
-        default="google/t5-xl-lm-adapt",
-        help="The HuggingFace model name (e.g. google/t5-xl-lm-adapt).",
+        default="t5-base",
+        help="The HuggingFace model name (e.g. t5-base).",
     )
     parser.add_argument(
         "--hf-cache-dir",

@@ -12,6 +12,8 @@ def _format_duration(seconds: float) -> str:
     if hours > 0:
         return f"{hours:d}:{minutes:02d}:{secs:02d}"
     return f"{minutes:02d}:{secs:02d}"
+
+
 from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 
@@ -201,6 +203,16 @@ if __name__ == "__main__":
         "winogrande",
         "wsc",
     ]
+
+    # Append model name to save directory
+    if args.save is None:
+        args.save = f"checkpoints/{args.model}"
+    else:
+        args.save = os.path.join(args.save, args.model)
+
+    # Append seed to save directory
+    if args.seed is not None:
+        args.save = os.path.join(args.save, f"seed_{args.seed}")
 
     for dataset in T5_DATASETS:
         args.train_dataset = dataset
