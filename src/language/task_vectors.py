@@ -22,6 +22,9 @@ class LanguageNonLinearTaskVector(_TaskVector):
     def _cast_to_same_type(self, other):
         return language_linear_to_nonlinear(other, self.vector.keys())
 
+    def param_key_to_cov_key(self, key: str):
+        return key.replace(".weight", "")
+
 
 class LanguageLinearizedTaskVector(_TaskVector):
     """Task vector for linearized T5 models."""
@@ -47,6 +50,9 @@ class LanguageLinearizedTaskVector(_TaskVector):
 
     def _cast_to_same_type(self, other):
         return language_nonlinear_to_linear(other)
+
+    def param_key_to_cov_key(self, key: str):
+        return key.replace(".weight", "")
 
 
 def language_nonlinear_to_linear(nonlinear_task_vector):

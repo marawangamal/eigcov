@@ -24,6 +24,9 @@ class NonLinearTaskVector(_TaskVector):
     def _cast_to_same_type(self, other):
         return linear_to_nonlinear(other, self.vector.keys())
 
+    def param_key_to_cov_key(self, key: str):
+        return "image_encoder." + key.replace(".weight", "")
+
 
 class LinearizedTaskVector(_TaskVector):
     """A task vector for linearized models."""
@@ -51,6 +54,9 @@ class LinearizedTaskVector(_TaskVector):
 
     def _cast_to_same_type(self, other):
         return nonlinear_to_linear(other)
+
+    def param_key_to_cov_key(self, key: str):
+        return "image_encoder." + key.replace(".weight", "")
 
 
 def nonlinear_to_linear(nonlinear_task_vector):

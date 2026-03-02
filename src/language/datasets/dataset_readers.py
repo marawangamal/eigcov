@@ -98,9 +98,13 @@ class DatasetReader(object):
                     all_templates.append(template)
         return all_templates
 
-    def _applyTemplate_toData(self, orig_data, num_templates, template_idx, is_evaluation):
+    def _applyTemplate_toData(
+        self, orig_data, num_templates, template_idx, is_evaluation
+    ):
         dataset = []
-        for datapoint_idx, datapoint in enumerate(tqdm(orig_data, desc="Applying templates")):
+        for datapoint_idx, datapoint in enumerate(
+            tqdm(orig_data, desc="Applying templates")
+        ):
             if template_idx >= 0:
                 templateIdx_forDatapoint = template_idx
             elif template_idx == -1:
@@ -134,7 +138,9 @@ class DatasetReader(object):
         test_data = orig_data[num_val_samples:]
         return val_data, test_data
 
-    def get_dataset(self, split, template_idx, is_evaluation, max_samples_per_dataset=None):
+    def get_dataset(
+        self, split, template_idx, is_evaluation, max_samples_per_dataset=None
+    ):
         if (split, template_idx) not in self.cached_datasets:
             orig_data = self._get_origData(split)
             total_examples = len(orig_data)
@@ -164,7 +170,11 @@ class DatasetReader(object):
                 )
 
             random.Random(4).shuffle(dataset)
-            dataset = dataset[:max_samples_per_dataset] if max_samples_per_dataset else dataset
+            dataset = (
+                dataset[:max_samples_per_dataset]
+                if max_samples_per_dataset
+                else dataset
+            )
             self.cached_datasets[(split, template_idx)] = dataset
 
         return self.cached_datasets[(split, template_idx)]
@@ -340,9 +350,10 @@ class StoryClozeReader(DatasetReader):
 
         if split not in self.cached_origData:
             huggingFace_data = load_dataset(
-                *self.dataset_stash,
-                split=load_split,
-                data_dir="/data/datasets/StoryCloze",
+                "csv",
+                data_files=f"datasets_language/cloze_{load_split}_{self.dataset_stash[1]}.csv",
+                trust_remote_code=True,
+                split="train",
             )
             orig_data = []
             for idx, example in enumerate(huggingFace_data):
@@ -351,7 +362,9 @@ class StoryClozeReader(DatasetReader):
                 orig_data.append(example)
 
             if split.lower() in ["validation", "test"]:
-                assert len(orig_data) > self.num_val_samples
+                assert (
+                    len(orig_data) > self.num_val_samples
+                ), f"Validation/Test split is too small. {len(orig_data)} < {self.num_val_samples}"
                 orig_val_data, orig_test_data = self._split_val_into_val_and_test(
                     orig_data, self.num_val_samples
                 )
@@ -377,7 +390,9 @@ class ANLIR1Reader(DatasetReader):
     def _read_origin_dataset(self, split):
         load_split = "dev" if "validation" in split.lower() else split
         if split not in self.cached_origData:
-            huggingFace_data = load_dataset(*self.dataset_stash, split=f"{load_split}_r1")
+            huggingFace_data = load_dataset(
+                *self.dataset_stash, split=f"{load_split}_r1"
+            )
             orig_data = []
             for idx, example in enumerate(huggingFace_data):
                 example["idx"] = idx
@@ -405,7 +420,9 @@ class ANLIR2Reader(DatasetReader):
     def _read_origin_dataset(self, split):
         load_split = "dev" if "validation" in split.lower() else split
         if split not in self.cached_origData:
-            huggingFace_data = load_dataset(*self.dataset_stash, split=f"{load_split}_r2")
+            huggingFace_data = load_dataset(
+                *self.dataset_stash, split=f"{load_split}_r2"
+            )
             orig_data = []
             for idx, example in enumerate(huggingFace_data):
                 example["idx"] = idx
@@ -433,7 +450,9 @@ class ANLIR3Reader(DatasetReader):
     def _read_origin_dataset(self, split):
         load_split = "dev" if "validation" in split.lower() else split
         if split not in self.cached_origData:
-            huggingFace_data = load_dataset(*self.dataset_stash, split=f"{load_split}_r3")
+            huggingFace_data = load_dataset(
+                *self.dataset_stash, split=f"{load_split}_r3"
+            )
             orig_data = []
             for idx, example in enumerate(huggingFace_data):
                 example["idx"] = idx
@@ -640,7 +659,14 @@ class QASCReader(DatasetReader):
                 setattr(self, k, v)
         self.name = "qasc"
         self.string_toLabelIdx = {
-            "A": 0, "B": 1, "C": 2, "D": 3, "E": 4, "F": 5, "G": 6, "H": 7,
+            "A": 0,
+            "B": 1,
+            "C": 2,
+            "D": 3,
+            "E": 4,
+            "F": 5,
+            "G": 6,
+            "H": 7,
         }
 
     def _read_origin_dataset(self, split):

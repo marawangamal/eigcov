@@ -220,4 +220,5 @@ class _TaskVector(abc.ABC):
                 lazy=False,
             )
 
-
+    def param_key_to_cov_key(self, key: str):
+        raise NotImplementedError("Subclasses must implement this method")

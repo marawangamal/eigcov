@@ -4,6 +4,7 @@ import os
 # from mha import copy_from_pytorch_state_dict, copy_to_pytorch_state_dict
 from src import mhap, mhas
 from src.args import parse_arguments
+from src.results_db import append_result, args_to_dict, make_run_hash, record_exists
 from src.vision.eval import evaluate_task_vector, evaluate_task_vector_at_coef
 from src.merging import combine_task_vectors
 from src.vision.task_vectors import LinearizedTaskVector, NonLinearTaskVector
@@ -16,6 +17,34 @@ if args.seed is not None:
 else:
     args.save = f"checkpoints/{args.model}"
 
+# Fields that should NOT affect the run identity:
+#   - training-only hyperparameters (lr, wd, …) — not used during eval
+#   - environment/path args (cache dirs, save dir) — machine-specific
+#   - fields set dynamically *after* this point (eval_datasets, finetuning_accuracies, …)
+#   - metadata (results_db path, exp_name, overwrite flag, …)
+_HASH_IGNORE = {
+    # training-only
+    "lr", "wd", "ls", "warmup_length", "epochs", "num_grad_accumulation", "batch_size",
+    "checkpoint_every", "keep_checkpoints", "port", "world_size", "cosine_samples",
+    "lora_rank", "lora_alpha", "lora_dropout", "lora_target_modules", "lora_target_parameters",
+    # environment / paths
+    "openclip_cachedir", "cache_dir", "save", "data_location",
+    # dynamically set after hash
+    "eval_datasets", "finetuning_accuracies", "control_dataset", "eval_split", "eval_max_batches",
+    # metadata
+    "results_db", "exp_name", "overwrite", "num_workers", "device",
+}
+
+_run_hash = make_run_hash("eval_task_addition", args, ignore=_HASH_IGNORE) if args.results_db else None
+if args.results_db and record_exists(args.results_db, _run_hash):
+    print(f"Skipping: matching record already exists in {args.results_db}")
+    exit(0)
+
+print("-" * 100)
+print("DEBUG:")
+print(f"Record to be saved: {_run_hash}")
+print(json.dumps({"script": "eval_task_addition", **args_to_dict(args)}, indent=4))
+print("-" * 100)
 
 print("*" * 100)
 if args.finetuning_mode == "standard":
@@ -179,3 +208,17 @@ elif args.finetuning_mode == "lora":
     save_file = f"{args.save}/lora_additions_{merge_name}.json"
 with open(save_file, "w") as f:
     json.dump(additive_accuracies, f, indent=4)
+
+if args.results_db:
+    append_result(
+        args.results_db,
+        {
+            "script": "eval_task_addition",
+            **args_to_dict(args),
+            "optimal_coef": optimal_coef,
+            **{f"test_{k}": v for k, v in test_metrics.items()},
+            **{f"val_{k}": v for k, v in val_metrics.items()},
+        },
+        _run_hash,
+    )
+    print("Results appended to", args.results_db)

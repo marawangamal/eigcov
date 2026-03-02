@@ -1,11 +1,10 @@
 import os
 import time
 
-import numpy as np
 import torch
-import torch.nn.functional as F
 
 
+# --finetuning-mode=standard   --model=ViT-B-16   --world-size=1   --num-workers=1   --openclip-cachedir=$SCRATCH/openclip   --data-location=datasets   --save=$SCRATCH/eigcov/checkpoints/vision
 from src.args import parse_arguments
 from src.vision.datasets.common import get_dataloader, maybe_dictionarize
 from src.vision.datasets.registry import get_dataset
@@ -56,8 +55,8 @@ def finetune(rank, args):
     else:
         ft_path = os.path.join(args.save, train_dataset, "finetuned.pt")
         zs_path = os.path.join(args.save, train_dataset, "zeroshot.pt")
-    if os.path.exists(zs_path) and os.path.exists(ft_path):
-        print(f"Skipping fine-tuning because {ft_path} exists.")
+    if os.path.exists(zs_path) and os.path.exists(ft_path) and not args.overwrite:
+        print(f"Skipping fine-tuning because {ft_path} already exists.")
         return zs_path, ft_path
 
     assert train_dataset is not None, "Please provide a training dataset."
@@ -156,10 +155,7 @@ def finetune(rank, args):
     )
 
     if is_main_process():
-        print(
-            "Total number of steps: ",
-            args.epochs * num_batches // args.num_grad_accumulation,
-        )
+        print(f"Total steps: {args.epochs * num_batches // args.num_grad_accumulation}")
 
     # Saving zero-shot model (LoRA zeroshot is saved before LoRA is applied)
     if args.save is not None and is_main_process() and not lora_finetuning:
@@ -170,39 +166,6 @@ def finetune(rank, args):
             else os.path.join(ckpdir, "zeroshot.pt")
         )
         ddp_model.module.image_encoder.save(model_path)
-
-    # --- Cosine similarity tracking setup ---
-    _cosine_hooks = []
-    _grad_k = None
-    _grad_k1 = None
-    _cosine_sim_log = []  # list of (step, cos_sim)
-    _last_cos_sim = float("nan")
-
-    if args.cosine_samples > 0 and is_main_process():
-        param_offsets = []
-        offset = 0
-        for p in params:
-            param_offsets.append((offset, offset + p.numel(), p))
-            offset += p.numel()
-        total_grad_elements = offset
-
-        _sampled_indices = torch.randperm(total_grad_elements)[: args.cosine_samples]
-        _grad_k = torch.zeros(args.cosine_samples)
-        _grad_k1 = torch.zeros(args.cosine_samples)
-
-        for start, end, p in param_offsets:
-            mask = (_sampled_indices >= start) & (_sampled_indices < end)
-            if not mask.any():
-                continue
-            positions = torch.where(mask)[0]
-            local_idxs = _sampled_indices[positions] - start
-
-            def _make_hook(pos, lidxs):
-                def _hook(grad):
-                    _grad_k1[pos] += grad.detach().flatten()[lidxs]
-                return _hook
-
-            _cosine_hooks.append(p.register_hook(_make_hook(positions, local_idxs)))
 
     run_start_time = time.perf_counter()
     for epoch in range(args.epochs):
@@ -232,16 +195,6 @@ def finetune(rank, args):
 
                 torch.nn.utils.clip_grad_norm_(params, 1.0)
                 optimizer.step()
-
-                if args.cosine_samples > 0 and is_main_process():
-                    if _grad_k.norm() > 0:
-                        _last_cos_sim = F.cosine_similarity(
-                            _grad_k1.unsqueeze(0), _grad_k.unsqueeze(0)
-                        ).item()
-                        _cosine_sim_log.append((step, _last_cos_sim))
-                    _grad_k.copy_(_grad_k1)
-                    _grad_k1.zero_()
-
                 optimizer.zero_grad()
 
             batch_time = time.time() - start_time
@@ -251,7 +204,6 @@ def finetune(rank, args):
                 and step % args.checkpoint_every == 0
                 and is_main_process()
             ):
-                print("Saving checkpoint.")
                 if linearized_finetuning:
                     model_path = os.path.join(ckpdir, f"linear_checkpoint_{step}.pt")
                 elif lora_finetuning:
@@ -259,7 +211,7 @@ def finetune(rank, args):
                 else:
                     model_path = os.path.join(ckpdir, f"checkpoint_{step}.pt")
                 ddp_model.module.image_encoder.save(model_path)
-                print(f"Saved checkpoint to {model_path}")
+                print(f"Saved checkpoint to {model_path}", flush=True)
 
             if (
                 step % print_every == 0
@@ -268,27 +220,12 @@ def finetune(rank, args):
             ):
                 percent_complete = 100 * i / len(ddp_loader)
                 run_elapsed = time.perf_counter() - run_start_time
-                cos_str = (
-                    f"\tCos sim {_last_cos_sim:.4f}" if args.cosine_samples > 0 else ""
-                )
                 print(
                     f"Train Epoch: {epoch}/{args.epochs} [{percent_complete:.0f}% {i}/{len(dataset.train_loader)}]\t"  # noqa: E501
                     f"Loss: {loss.item():.6f}\tData (t) {data_time:.3f}\tBatch (t) {batch_time:.3f}\t"  # noqa: E501
-                    f"Elapsed {_format_duration(run_elapsed)}{cos_str}",  # noqa: E501
+                    f"Elapsed {_format_duration(run_elapsed)}",  # noqa: E501
                     flush=True,
                 )
-
-    # Cosine sim cleanup and save
-    if args.cosine_samples > 0 and is_main_process():
-        for h in _cosine_hooks:
-            h.remove()
-        if _cosine_sim_log and args.save is not None:
-            steps_arr, sims_arr = zip(*_cosine_sim_log)
-            np.savez(
-                os.path.join(ckpdir, "cosine_sim.npz"),
-                steps=np.array(steps_arr),
-                cosine_sim=np.array(sims_arr),
-            )
 
     # FIXME: Make this work with DDP.
     if is_main_process():
@@ -340,6 +277,17 @@ if __name__ == "__main__":
     }
 
     args = parse_arguments()
+
+    # Append model name to save directory
+    if args.save is None:
+        args.save = f"checkpoints/{args.model}"
+    else:
+        args.save = os.path.join(args.save, args.model)
+
+    # Append seed to save directory
+    if args.seed is not None:
+        args.save = os.path.join(args.save, f"seed_{args.seed}")
+
     if args.train_dataset is not None:
         train_datasets = [ds.strip() for ds in args.train_dataset]
 
@@ -353,11 +301,7 @@ if __name__ == "__main__":
         args.batch_size = 64 if args.model == "ViT-L-14" else 128
         args.num_grad_accumulation = 2 if args.model == "ViT-L-14" else 1
 
-        if args.seed is not None:
-            args.save = f"checkpoints_{args.seed}/{args.model}"
-        else:
-            args.save = f"checkpoints/{args.model}"
         print("=" * 100)
-        print(f"Finetuning {args.model} on {dataset}")
+        print(f"Fine-tuning {args.model} on {dataset} ({args.finetuning_mode})")
         print("=" * 100)
         torch.multiprocessing.spawn(finetune, args=(args,), nprocs=args.world_size)

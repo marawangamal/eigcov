@@ -3,12 +3,18 @@ import os
 
 from src.language.args import parse_arguments
 from src.language.eval import eval_single_dataset
-from src.language.task_vectors import LanguageLinearizedTaskVector, LanguageNonLinearTaskVector
+from src.language.task_vectors import (
+    LanguageLinearizedTaskVector,
+    LanguageNonLinearTaskVector,
+)
 
 T5_DATASETS = ["qasc", "wiki_qa", "quartz", "paws", "story_cloze", "winogrande", "wsc"]
 
 args = parse_arguments()
-
+if args.seed is not None:
+    args.save = f"checkpoints_{args.seed}/{args.model}"
+else:
+    args.save = f"checkpoints/{args.model}"
 accuracies = {}
 
 print("*" * 100)
@@ -31,6 +37,9 @@ for dataset in T5_DATASETS:
     elif args.finetuning_mode == "none":
         pretrained_checkpoint = f"{args.save}/{dataset}/zeroshot.pt"
         finetuned_checkpoint = f"{args.save}/{dataset}/zeroshot.pt"
+    elif args.finetuning_mode == "lora":
+        pretrained_checkpoint = f"{args.save}/{dataset}/zeroshot.pt"
+        finetuned_checkpoint = f"{args.save}/{dataset}/lora_finetuned.pt"
     else:
         pretrained_checkpoint = f"{args.save}/{dataset}/zeroshot.pt"
         finetuned_checkpoint = f"{args.save}/{dataset}/finetuned.pt"
@@ -39,7 +48,9 @@ for dataset in T5_DATASETS:
         task_vector = (
             LanguageLinearizedTaskVector(pretrained_checkpoint, finetuned_checkpoint)
             if args.finetuning_mode == "linear"
-            else LanguageNonLinearTaskVector(pretrained_checkpoint, finetuned_checkpoint)
+            else LanguageNonLinearTaskVector(
+                pretrained_checkpoint, finetuned_checkpoint
+            )
         )
     except FileNotFoundError as e:
         print(f"Error: Could not find checkpoint — {e}")
@@ -60,8 +71,16 @@ for dataset in T5_DATASETS:
         )["top1"]
 
 # Add averages
-val_scores = [v for k, v in accuracies.items() if k.endswith("Val") and isinstance(v, (int, float))]
-test_scores = [v for k, v in accuracies.items() if not k.endswith("Val") and isinstance(v, (int, float))]
+val_scores = [
+    v
+    for k, v in accuracies.items()
+    if k.endswith("Val") and isinstance(v, (int, float))
+]
+test_scores = [
+    v
+    for k, v in accuracies.items()
+    if not k.endswith("Val") and isinstance(v, (int, float))
+]
 accuracies["avg_val"] = (sum(val_scores) / len(val_scores)) if val_scores else None
 accuracies["avg_test"] = (sum(test_scores) / len(test_scores)) if test_scores else None
 
@@ -75,7 +94,11 @@ elif args.finetuning_mode == "linear":
 else:
     save_path = f"{args.save}/{args.finetuning_mode}_ft_accuracies.json"
 
-os.makedirs(os.path.dirname(save_path), exist_ok=True) if os.path.dirname(save_path) else None
+(
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    if os.path.dirname(save_path)
+    else None
+)
 
 # Merge with existing results if file already exists
 if os.path.exists(save_path):

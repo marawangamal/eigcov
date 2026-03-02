@@ -9,8 +9,8 @@ def parse_arguments():
     parser.add_argument(
         "--model",
         type=str,
-        default="google/t5-xl-lm-adapt",
-        help="The HuggingFace model name (e.g. google/t5-xl-lm-adapt).",
+        default="t5-base",
+        help="The HuggingFace model name (e.g. t5-base).",
     )
     parser.add_argument(
         "--hf-cache-dir",
@@ -87,8 +87,17 @@ def parse_arguments():
     parser.add_argument(
         "--finetuning-mode",
         default="standard",
-        choices=["standard", "linear"],
-        help="Whether to use standard or linearized fine-tuning.",
+        choices=["none", "standard", "linear", "lora"],
+        help="Whether to use standard or linearized fine-tuning, or 'none' for zeroshot.",
+    )
+    parser.add_argument("--lora-rank", type=int, default=16, help="LoRA rank.")
+    parser.add_argument("--lora-alpha", type=float, default=16, help="LoRA alpha.")
+    parser.add_argument("--lora-dropout", type=float, default=0.0, help="LoRA dropout.")
+    parser.add_argument(
+        "--lora-target-modules",
+        type=str,
+        default="all-linear",
+        help="Comma-separated list of target modules for LoRA.",
     )
     parser.add_argument(
         "--world-size",
@@ -109,9 +118,21 @@ def parse_arguments():
         help="Random seed.",
     )
     parser.add_argument(
+        "--coeff-start",
+        type=float,
+        default=1.0,
+        help="Start coefficient for evaluation.",
+    )
+    parser.add_argument(
+        "--coeff-end",
+        type=float,
+        default=1.0,
+        help="End coefficient for evaluation.",
+    )
+    parser.add_argument(
         "--n-eval-points",
         type=int,
-        default=21,
+        default=1,
         help="Number of evaluation points for coefficient search in task arithmetic.",
     )
     parser.add_argument(
@@ -137,6 +158,81 @@ def parse_arguments():
         type=str,
         default=None,
         help="Name of the experiment, for organization purposes only.",
+    )
+    parser.add_argument(
+        "--merge-func",
+        type=str,
+        default="sum",
+        help="Task vector merge function (e.g. sum, mean, ties, regmean).",
+    )
+    parser.add_argument(
+        "--cov-dir",
+        type=str,
+        default=None,
+        help="Directory containing per-dataset covariance .npz files.",
+    )
+    parser.add_argument(
+        "--results-db",
+        type=str,
+        default=None,
+        help="Path to a JSON-lines results database file.",
+    )
+    parser.add_argument(
+        "--eval-val-split",
+        type=str,
+        default="validation",
+        help="Split used for coefficient selection (validation or train).",
+    )
+    parser.add_argument(
+        "--eval-test-split",
+        type=str,
+        default="test",
+        help="Split used for final evaluation.",
+    )
+    parser.add_argument(
+        "--eval-val-max-batches",
+        type=int,
+        default=None,
+        help="Cap number of batches during coefficient selection (None = all).",
+    )
+
+    # Covariance collection arguments
+    parser.add_argument(
+        "--cov-split",
+        type=str,
+        default="train",
+        help="Dataset split to use for covariance collection.",
+    )
+    parser.add_argument(
+        "--cov-num-batches",
+        type=int,
+        default=None,
+        help="Max number of batches for covariance collection (None = all).",
+    )
+    parser.add_argument(
+        "--cov-batch-size",
+        type=int,
+        default=32,
+        help="Batch size for covariance collection.",
+    )
+    parser.add_argument(
+        "--cov-type",
+        type=str,
+        default="sm",
+        choices=["cov", "sm"],
+        help="Covariance type: centered ('cov') or uncentered second moment ('sm').",
+    )
+    parser.add_argument(
+        "--cov-estimator",
+        type=str,
+        default="sampled",
+        choices=["sampled", "full"],
+        help="Covariance estimator: 'sampled' (one token) or 'full' (all tokens).",
+    )
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Overwrite existing covariance files.",
     )
 
     parsed_args = parser.parse_args()

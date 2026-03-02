@@ -119,7 +119,7 @@ def evaluate_task_vector(
 ):
     """Grid-search over scaling coefficients and return per-coefficient metrics."""
     info = {}
-    for scaling_coef in np.linspace(0.0, 1.0, args.n_eval_points):
+    for scaling_coef in np.linspace(args.coeff_start, args.coeff_end, args.n_eval_points):
         print(f"Evaluating for scaling coefficient {scaling_coef:.2f}")
         info[scaling_coef] = evaluate_task_vector_at_coef(
             split,

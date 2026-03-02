@@ -16,7 +16,7 @@ TensorMergeFn = Callable[[str, Sequence[torch.Tensor]], torch.Tensor]
 
 
 def combine_task_vectors(
-    vectors: Sequence[_TaskVector], merge: str, args: Namespace
+    vectors: Sequence[_TaskVector], merge: str, *args, **kwargs
 ) -> _TaskVector:
     """Generic combiner for task vectors.
 
@@ -214,8 +214,8 @@ pinv = torch.linalg.pinv
 # ---------------------------------------------------------------------------
 # RegMean
 # ---------------------------------------------------------------------------
-def _param_key_to_module_key(key: str):
-    return "image_encoder." + key.replace(".weight", "")
+# def _param_key_to_module_key(key: str):
+#     return "image_encoder." + key.replace(".weight", "")
 
 
 # Test normalized accuracy: 0.8934755825227096
@@ -230,8 +230,9 @@ def _merge_regmean(
     **kwargs,
 ):
     c = []
-    km = _param_key_to_module_key(key)
+    # km = v.param_key_to_cov_key(key)
     for v in vectors:
+        km = v.param_key_to_cov_key(key)
         cpath = v.covariance_path
         if cpath is None:
             raise ValueError(f"No covariance path provided for task vector {v}")
@@ -271,6 +272,38 @@ merge_regmean_mx1000 = lambda *args, **kwargs: _merge_regmean(
 merge_regmean_sc = lambda *args, **kwargs: _merge_regmean(
     *args, sample_cov=True, **kwargs
 )
+
+
+# ---------------------------------------------------------------------------
+# Fisher Merging
+# ---------------------------------------------------------------------------
+def _dinv(x, thresh=1e-8):
+    return torch.where(x.abs() > thresh, 1 / x, 0)
+
+
+def merge_fisher(
+    tau: torch.Tensor,
+    key: str,
+    vectors: Sequence[_TaskVector],
+    **kwargs,
+):
+    N, Do, Di = tau.shape
+    f = []
+    # km = v.param_key_to_cov_key(key)
+    for v in vectors:
+        km = v.param_key_to_cov_key(key)
+        fpath = v.fisher_path
+        if fpath is None:
+            raise ValueError(f"No fisher matrix path provided for task vector {v}")
+        with np.load(fpath) as fdict:
+            if km not in fdict:
+                print(f"[skipped] {km} not found in {fpath}")
+                return tau.mean(dim=0)
+            f.append(fdict[km])
+
+    # Shape: (N, Do*Di)
+    f = torch.stack([torch.as_tensor(x, device=tau.device, dtype=tau.dtype) for x in f])
+    return _dinv(f.sum(dim=0)) * (f * tau.reshape(N, Do * Di)).sum(dim=0)
 
 
 # ---------------------------------------------------------------------------

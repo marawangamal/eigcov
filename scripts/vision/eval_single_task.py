@@ -1,6 +1,7 @@
 import json
 
 from src.args import parse_arguments
+from src.results_db import append_result, args_to_dict, make_run_hash, record_exists
 from src.vision.eval import eval_single_dataset
 from src.vision.linearize import LinearizedImageEncoder
 from src.vision.task_vectors import LinearizedTaskVector, NonLinearTaskVector
@@ -10,6 +11,11 @@ if args.seed is not None:
     args.save = f"checkpoints_{args.seed}/{args.model}"
 else:
     args.save = f"checkpoints/{args.model}"
+
+_run_hash = make_run_hash("eval_single_task", args) if args.results_db else None
+if args.results_db and record_exists(args.results_db, _run_hash):
+    print(f"Skipping: matching record already exists in {args.results_db}")
+    exit(0)
 
 accuracies = {}
 
@@ -118,3 +124,15 @@ elif args.finetuning_mode == "lora":
 with open(save_path, "w") as f:
     json.dump(accuracies, f)
 print("Results saved to", save_path)
+
+if args.results_db:
+    append_result(
+        args.results_db,
+        {
+            "script": "eval_single_task",
+            **args_to_dict(args),
+            **accuracies,
+        },
+        _run_hash,
+    )
+    print("Results appended to", args.results_db)

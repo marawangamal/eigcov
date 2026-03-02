@@ -1,50 +1,7 @@
 # Covariance Estimation using Task Matrices
 
-## Repository Structure
-
-```
-src/                         # Library code (importable modules)
-├── task_vectors.py          # Task vector arithmetic (model-agnostic)
-├── merging.py               # Merging strategies: sum, RegMean, EigenCov, PRM, ...
-├── merging_ties.py          # TIES merging
-├── covariance.py            # OnlineCovariance + register_hooks (model-agnostic)
-├── distributed.py           # DDP utilities (model-agnostic)
-├── mhap.py / mhas.py        # Custom MHA variants: packed / split (model-agnostic)
-├── args.py                  # Shared argument parser
-├── utils.py                 # Shared utilities
-│
-├── vision/                  # Vision-specific library code (OpenCLIP / ViT)
-│   ├── modeling.py          # ImageEncoder, ImageClassifier
-│   ├── heads.py             # Zero-shot classification heads
-│   ├── eval.py              # eval_single_dataset, evaluate_task_vector, ...
-│   ├── linearize.py         # Taylor-linearized vision encoder
-│   └── datasets/            # MNIST, Cars, DTD, EuroSAT, GTSRB, ...
-│
-└── language/                # Language-specific library code (T5 / HuggingFace)
-    ├── modeling.py
-    ├── linearize.py
-    ├── args.py
-    ├── eval/
-    └── datasets/
-
-scripts/                     # Entry points (run directly)
-├── setup.sh
-├── vision/
-│   ├── finetune.py          # Fine-tune vision models
-│   ├── eval_single_task.py  # Evaluate single fine-tuned model
-│   ├── eval_task_addition.py
-│   ├── eval_task_negation.py
-│   ├── covariance.py        # Collect per-layer covariance matrices
-│   ├── decorrelation*.py    # Activation–gradient decorrelation analysis
-│   ├── interference.py      # Per-layer interference analysis
-│   ├── disentanglement.py
-│   └── gmag.py
-└── language/
-    ├── finetune.py          # Fine-tune T5 models
-    ├── eval_single_task.py  # Evaluate single fine-tuned model
-    ├── eval_task_addition.py
-    └── eval_task_negation.py
-```
+## TODO
+- [ ] Move src/args.py => src/vision/args.py
 
 ## Setup
 
@@ -60,166 +17,149 @@ unzip -q $SLURM_TMPDIR/vit_datasets_08.zip -d $SLURM_TMPDIR/
 
 ### 1. Fine-tune
 
-<!-- salloc --gres=gpu:rtx8000:4 --ntasks-per-node=1 --cpus-per-task=8 --mem=32G -->
-
 ```sh
 python scripts/vision/finetune.py \
-  --finetuning-mode=linear \
+  --finetuning-mode=standard \
   --model=ViT-B-16 \
   --world-size=1 \
   --num-workers=1 \
   --openclip-cachedir=$SCRATCH/openclip \
-  --data-location=$SLURM_TMPDIR/datasets
+  --data-location=$SLURM_TMPDIR/datasets \
+  --save=$SCRATCH/eigcov/checkpoints/vision 
 ```
 
 Options for `--finetuning-mode`: `standard`, `lora`, `linear`, `posthoc`.
 
-### 2. Evaluate single task zeroshot / standard / linear
+### 2. Evaluate single model (zeroshot / standard / linear / lora)
 
 ```sh
 python scripts/vision/eval_single_task.py \
-  --finetuning-mode=standard \
-  --model=ViT-B-16 \
+  --finetuning-mode=lora \
+  --model=ViT-B-32 \
   --openclip-cachedir=$SCRATCH/openclip \
   --data-location=$SLURM_TMPDIR/datasets
-
-python scripts/vision/eval_single_task.py \
-  --finetuning-mode=linear \
-  --model=ViT-B-16 \
-  --openclip-cachedir=$SCRATCH/openclip \
-  --data-location=$SLURM_TMPDIR/datasets
-
 ```
 
-### 3. Collect covariance matrices
+### 3. Evaluate merged models
+**NOTE:** Must run single task script in (2) first.
 
 ```sh
-python scripts/vision/covariance.py \
-  --model=ViT-B-16 \
-  --cov-split=train \
-  --cov-num-batches=10 \
-  --cov-batch-size=1 \
-  --mha=split \
-  --cov-type=sm \
-  --cov-estimator=full
-```
-`--mha`: `split` Splits q,k,v into separate linear modules.
-
-### 4. Evaluate merged models
-
-```sh
-# Task Arithmetic
-python scripts/vision/eval_task_addition.py \
-  --model=ViT-B-16 --finetuning-mode=standard --merge-func=sum
-
 # EigenCov (data-free)
 python scripts/vision/eval_task_addition.py \
   --model=ViT-B-16 --finetuning-mode=standard --merge-func=eigcov
 
-# RegMean (requires covariance)
+# RegMean (must run covariance.py first, see below)
 python scripts/vision/eval_task_addition.py \
-  --model=ViT-B-16 --finetuning-mode=standard --merge-func=regmean \
+  --model=ViT-B-16 --finetuning-mode=lora --merge-func=regmean \
   --mha=split \
-  --cov-dir=results/ViT-B-16/covariances_strain_n50_b32_tcov_attnsplit_esampled
-
-
-
-python scripts/vision/eval_task_addition.py  --model=ViT-L-14 --finetuning-mode=standard --merge-func=regmean \
---coeff-start=1.0 --n-eval-points=1 --mha=split --cov-dir results/ViT-L-14/covariances_strain_n10_b32_tsm_attnsplit_efull
-# next
-
-
-# Projected RegMean
-python scripts/vision/eval_task_addition.py \
-  --model=ViT-B-16 --finetuning-mode=standard --merge-func=prm \
-  --coeff-start=1.0 --n-eval-points=1
+  --cov-dir=results/ViT-B-16/covariances_strain_n10_b32_tsm_attnsplit_efull_ftlora \
+  --coeff-start=0 --n-eval-points=11
 ```
 
-### 5. Analysis scripts
+## Scripts 
 
+### Generate covariance matrices (only required for RegMean)
 ```sh
-python scripts/decorrelation_offline.py --model=ViT-B-16 ...
-python scripts/interference.py --model=ViT-B-16 ...
-python scripts/disentanglement.py --model=ViT-B-16 ...
+python scripts/vision/covariance.py \
+  --model=ViT-B-32 \
+  --cov-split=train \
+  --cov-num-batches=10 \
+  --cov-batch-size=32 \
+  --mha=split \
+  --cov-type=sm \
+  --cov-estimator=full
+```
+**NOTE:** `--mha`: `split` Splits q,k,v into separate linear modules so their activation covariances can be collected (otherwise will be ignored).
+
+
+### Reproducing Vision Experiments
+To reproduce vision experiments simply run the following commands. The results will be saved to `results/results.jsonl`
+```sh
+bash scripts/vision/train.sh
+bash scripts/vision/eval.sh
 ```
 
-## Language Experiments (t5-base)
+### Reproducing gradient orientation experiments
+```sh
+python scripts/vision/finetune.py \
+  --finetuning-mode=standard \
+  --model=ViT-B-16 \
+  --world-size=1 \
+  --num-workers=1 \
+  --openclip-cachedir=$SCRATCH/openclip \
+  --data-location=$SLURM_TMPDIR/datasets \
+  --save=$SCRATCH/eigcov/checkpoints/vision \
+  --cosine-samples=128
+```
 
-Datasets: `qasc`, `wiki_qa`, `quartz`, `paws`, `story_cloze`, `winogrande`, `wsc`
-
+## Language Experiments
 ### 1. Fine-tune
 
 ```sh
 python scripts/language/finetune.py \
   --finetuning-mode=standard \
   --model=t5-base \
-  --save=$SCRATCH/eigcov/checkpoints/language \
+  --save=$SCRATCH/eigcov/checkpoints \
   --hf-cache-dir=$SCRATCH/hf_cache
 ```
 
-Options for `--finetuning-mode`: `standard`, `linear`.
-
-### 2. Evaluate zero-shot / standard / Linear
-
+### 2. Evaluate single model (zeroshot / standard / linear / lora)
 ```sh
-# Zero-shot (pretrained model, no task vector applied)
 python scripts/language/eval_single_task.py \
-  --finetuning-mode=none \
-  --save=$SCRATCH/eigcov/checkpoints/language
-
-# Fine-tuned
-python scripts/language/eval_single_task.py \
-  --finetuning-mode=standard \
-  --save=$SCRATCH/eigcov/checkpoints/language
-
-# Linear
-python scripts/language/eval_single_task.py \
-  --finetuning-mode=linear \
-  --save=$SCRATCH/eigcov/checkpoints/language
+--finetuning-mode=standard  --save=$SCRATCH/eigcov/checkpoints
 ```
 
-Saves results to `{save}/zeroshot_accuracies.json` or `{save}/ft_accuracies.json`.
-
-### 3. Evaluate task addition (task arithmetic)
-
-Requires `zeroshot_accuracies.json` and `ft_accuracies.json` (or `linear_ft_accuracies.json`) to exist in `--save`.
-
+### 3. Evaluate merged models
+**NOTE:** Must run single task script in (2) first.
 ```sh
 python scripts/language/eval_task_addition.py \
-  --finetuning-mode=standard \
-  --save=$SCRATCH/eigcov/checkpoints/language
+  --model=t5-base --finetuning-mode=standard --merge-func=eigcov --save=$SCRATCH/eigcov/checkpoints/language
 ```
 
-Saves results to `{save}/additions.json`.
+## Repository Structure
 
-### 4. Evaluate task negation
+```
+src/                          # Library code (importable modules)
+├── task_vectors.py           # Task vector arithmetic (model-agnostic)
+├── merging.py                # Merging strategies: EigenCov, RegMean, TSV, ...
+├── covariance.py             # OnlineCovariance + register_hooks (model-agnostic)
+├── distributed.py            # DDP utilities (model-agnostic)
+├── mhap.py / mhas.py         # Custom multi-head attention variants: packed / split (model-agnostic)
+├── args.py                   # Shared argument parser
+├── utils.py                  # Shared utilities
+│
+├── vision/                   # Vision-specific library code (OpenCLIP / ViT)
+│   ├── modeling.py           # ImageEncoder, ImageClassifier
+│   ├── heads.py              # Zero-shot classification heads
+│   ├── eval.py               # eval_single_dataset, evaluate_task_vector, ...
+│   ├── linearize.py          # Taylor-linearized vision encoder
+│   └── datasets/             # MNIST, Cars, DTD, EuroSAT, GTSRB, ...
+│
+└── language/                 # Language-specific code
+    ├── modeling.py
+    ├── linearize.py
+    ├── args.py
+    ├── eval/
+    └── datasets/
 
-```sh
-python scripts/language/eval_task_negation.py \
-  --finetuning-mode=standard \
-  --save=$SCRATCH/eigcov/checkpoints/language \
-  --control-threshold=0.95
+scripts/                      # Entry points (run directly)
+├── setup.sh
+├── vision/
+│   ├── finetune.py           # Fine-tune vision models
+│   ├── eval_single_task.py   # Evaluate single fine-tuned model
+│   ├── eval_task_addition.py # Evaluate merged model
+│   ├── eval_task_negation.py
+│   ├── covariance.py         # Collect per-layer covariance matrices
+│   └── correlation.py        # Collect correlations of actiavations & gradients
+└── language/
+    ├── finetune.py           # Fine-tune T5 models
+    ├── eval_single_task.py   # Evaluate single fine-tuned model
+    ├── eval_task_addition.py
+    └── eval_task_negation.py
 ```
 
-Uses `rte` as the control dataset. Saves results to `{save}/negations.json`.
 
-## Covariance Estimation API
-
-`OnlineCovariance` and `register_hooks` in `src/covariance.py` are
-model-agnostic and work with any `nn.Linear` / `nn.MultiheadAttention`
-layer. Pass modality-specific module types via `extra_module_types`:
-
-```python
-from src.covariance import register_hooks
-
-cobjs, handles = register_hooks(
-    model, args,
-    extra_module_types=(MyCustomAttention,),
-)
-```
-
-
-## Overview
+## Overview of Language Experiments
 
 **Model: T5**(encoder-decoder)                                                                                                                                                  
 

@@ -1,3 +1,5 @@
+import uuid
+
 from evaluate import load
 from statistics import mean
 
@@ -19,11 +21,11 @@ class Scorer(object):
 
         if "Accuracy" in metrics:
             self.metrics_toCompute["accuracy"] = True
-            self.accuracy_metric = load("accuracy")
+            self.accuracy_metric = load("accuracy", experiment_id=str(uuid.uuid4()))
 
         if "Squad" in metrics:
             self.metrics_toCompute["squad"] = True
-            self.squad_metric = load("squad")
+            self.squad_metric = load("squad", experiment_id=str(uuid.uuid4()))
 
     def add_batch(self, batchOf_evalInfo):
         if self.metrics_toCompute["accuracy"]:

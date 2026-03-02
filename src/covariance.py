@@ -46,12 +46,30 @@ class OnlineCovariance:
         self.C += x @ y.T
 
 
-def register_hooks(model, args, extra_module_types=()):
+def register_hooks(
+    model,
+    cov_device,
+    cov_type="sm",
+    cov_estimator="full",
+    mask_ref=None,
+    batch_first=False,
+    extra_module_types=(),
+):
     """Register forward hooks to collect per-layer covariance.
 
     Args:
         model: PyTorch model.
-        args: Namespace with cov_estimator, cov_device, cov_type.
+        cov_device: Device to store covariance matrices on.
+        cov_type: Covariance mode passed to OnlineCovariance ("sm" or "cov").
+        cov_estimator: "full" for full-sequence DxT vectors, "sampled" for a
+            single random token position per sample.
+        mask_ref: A list of mask tensors (each shape (B, T)) that the caller
+            updates each batch before the forward pass. The hook matches the
+            mask whose T dimension equals the activation's T. Pass None to
+            disable masking. Only supported when batch_first=True.
+        batch_first: If True, activations are (B, T, D); if False, (T, B, D).
+            Vision (OpenCLIP) is sequence-first (False); language (T5/HF) is
+            batch-first (True).
         extra_module_types: Additional module types to hook beyond
             nn.Linear and nn.MultiheadAttention (e.g. custom MHA variants).
 
@@ -74,27 +92,46 @@ def register_hooks(model, args, extra_module_types=()):
                 x = inp[0] if isinstance(inp, (tuple, list)) else inp
                 if not isinstance(x, torch.Tensor):
                     return
-                T, B, D = x.shape
 
-                if args.cov_estimator == "sampled":
+                if batch_first:
+                    B, T, D = x.shape
+                    # Pick the mask whose sequence length matches T
+                    mask = None
+                    if mask_ref is not None:
+                        for m in mask_ref:
+                            if m is not None and m.shape[1] == T:
+                                mask = m
+                                break
+                    if mask is not None:
+                        x = x * mask.unsqueeze(-1).float()
+                else:
+                    T, B, D = x.shape
+
+                if cov_estimator == "sampled":
                     # Dx1 vector: one random token position per sample
                     if n not in cobjs:
                         cobjs[n] = OnlineCovariance(
-                            D, device=args.cov_device, mode=args.cov_type
+                            D, device=cov_device, mode=cov_type
                         )
                     cobj = cobjs[n]
                     for b in range(B):
                         j = torch.randint(0, T, (1,)).item()
-                        cobj.add(x[j : j + 1, b].T, x[j : j + 1, b].T)
+                        if batch_first:
+                            cobj.add(x[b, j : j + 1].T, x[b, j : j + 1].T)
+                        else:
+                            cobj.add(x[j : j + 1, b].T, x[j : j + 1, b].T)
                 else:
                     # DxT vector: full sequence per sample
                     if n not in cobjs:
                         cobjs[n] = OnlineCovariance(
-                            D, T, device=args.cov_device, mode=args.cov_type
+                            D, T, device=cov_device, mode=cov_type
                         )
                     cobj = cobjs[n]
                     for b in range(B):
-                        cobj.add(x[:, b].T, x[:, b].T)
+                        if batch_first:
+                            cobj.add(x[b, :].T, x[b, :].T)
+                        else:
+                            cobj.add(x[:, b].T, x[:, b].T)
 
             return hook
 

@@ -2,6 +2,18 @@ import os
 import time
 
 import torch
+
+
+def _format_duration(seconds: float) -> str:
+    seconds_int = max(0, int(seconds))
+    hours = seconds_int // 3600
+    minutes = (seconds_int % 3600) // 60
+    secs = seconds_int % 60
+    if hours > 0:
+        return f"{hours:d}:{minutes:02d}:{secs:02d}"
+    return f"{minutes:02d}:{secs:02d}"
+
+
 from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 
@@ -27,22 +39,25 @@ def finetune(args):
     assert args.finetuning_mode in [
         "linear",
         "standard",
-    ], "Only 'linear' and 'standard' fine-tuning modes are supported."
+        "lora",
+    ], "Only 'linear', 'standard', and 'lora' fine-tuning modes are supported."
 
     linearized_finetuning = args.finetuning_mode == "linear"
+    lora_finetuning = args.finetuning_mode == "lora"
     if linearized_finetuning:
         print("Using linearized fine-tuning.")
+    elif lora_finetuning:
+        print("Using LoRA fine-tuning.")
 
-    ft_path = (
-        os.path.join(ckpdir, "linear_finetuned.pt")
-        if linearized_finetuning
-        else os.path.join(ckpdir, "finetuned.pt")
-    )
-    zs_path = (
-        os.path.join(ckpdir, "linear_zeroshot.pt")
-        if linearized_finetuning
-        else os.path.join(ckpdir, "zeroshot.pt")
-    )
+    if linearized_finetuning:
+        ft_path = os.path.join(ckpdir, "linear_finetuned.pt")
+        zs_path = os.path.join(ckpdir, "linear_zeroshot.pt")
+    elif lora_finetuning:
+        ft_path = os.path.join(ckpdir, "lora_finetuned.pt")
+        zs_path = os.path.join(ckpdir, "zeroshot.pt")
+    else:
+        ft_path = os.path.join(ckpdir, "finetuned.pt")
+        zs_path = os.path.join(ckpdir, "zeroshot.pt")
 
     if os.path.exists(zs_path) and os.path.exists(ft_path):
         print(f"Skipping fine-tuning because {ft_path} already exists.")
@@ -63,8 +78,25 @@ def finetune(args):
         model = T5Wrapper(transformer, tokenizer)
 
     os.makedirs(ckpdir, exist_ok=True)
-    zs_name = "linear_zeroshot.pt" if linearized_finetuning else "zeroshot.pt"
-    model.save(os.path.join(ckpdir, zs_name))
+    model.save(zs_path)
+
+    if lora_finetuning:
+        from peft import LoraConfig, get_peft_model
+
+        # "all-linear" is a PEFT special string and must NOT be split into a list
+        target_modules = (
+            args.lora_target_modules
+            if args.lora_target_modules == "all-linear"
+            else args.lora_target_modules.split(",")
+        )
+        lora_config = LoraConfig(
+            r=args.lora_rank,
+            lora_alpha=args.lora_alpha,
+            lora_dropout=args.lora_dropout,
+            target_modules=target_modules,
+        )
+        model.transformer = get_peft_model(model.transformer, lora_config)
+        model.transformer.print_trainable_parameters()
 
     model = model.cuda()
 
@@ -90,9 +122,14 @@ def finetune(args):
 
     params = [p for p in model.parameters() if p.requires_grad]
     optimizer = torch.optim.AdamW(params, lr=args.lr, weight_decay=args.wd)
+    if lora_finetuning:
+        print(
+            f"  rank: {args.lora_rank}, alpha: {args.lora_alpha}, "
+            f"dropout: {args.lora_dropout}, modules: {args.lora_target_modules}"
+        )
     scaler = torch.amp.GradScaler("cuda")
 
-    ft_name = "linear_finetuned.pt" if linearized_finetuning else "finetuned.pt"
+    ft_name = ft_path.split("/")[-1]
     patience = getattr(args, "patience", 5)
     best_val_acc = -1.0
     num_bad_checkpoints = 0
@@ -123,14 +160,13 @@ def finetune(args):
         step = (i + 1) // num_grad_accumulation
         if (i + 1) % (args.print_every * num_grad_accumulation) == 0:
             percent_complete = 100 * step / num_batches
+            elapsed = time.time() - train_start_time
             print(
-                f"[{i}] Train Iteration: {step}  [{percent_complete:.0f}% {step}/{num_batches}]\t"
+                f"Train Iteration: {step} [{percent_complete:.0f}% {step}/{num_batches}]\t"
                 f"Loss: {loss.item():.6f}\t"
-                f"Data (t) {data_time:.3f}\t"
-                f"Batch (t) {batch_time:.3f}\t"
+                f"Data (t) {data_time:.3f}\tBatch (t) {batch_time:.3f}\t"
                 f"Best val acc: {100 * best_val_acc:.2f}%\t"
-                f"Elapsed (t) {time.time() - train_start_time:.2f}s\t",
-                # f"DEBUG: {(i + 1) % (num_grad_accumulation * args.print_every)}",
+                f"Elapsed {_format_duration(elapsed)}",
                 flush=True,
             )
         if (
@@ -143,7 +179,11 @@ def finetune(args):
             if val_acc > best_val_acc:
                 best_val_acc = val_acc
                 num_bad_checkpoints = 0
-                model.save(os.path.join(ckpdir, ft_name))
+                if lora_finetuning:
+                    merged = model.transformer.merge_and_unload()
+                    T5Wrapper(merged, tokenizer).save(os.path.join(ckpdir, ft_name))
+                else:
+                    model.save(os.path.join(ckpdir, ft_name))
                 saved_best = True
                 print(
                     f"New best val acc: {100 * best_val_acc:.2f}% — checkpoint saved.",
@@ -164,7 +204,11 @@ def finetune(args):
     # If early stopping never fired, save the final model
     if not saved_best:
         eval_single_dataset("validation", model, tokenizer, train_dataset, args)
-        model.save(os.path.join(ckpdir, ft_name))
+        if lora_finetuning:
+            merged = model.transformer.merge_and_unload()
+            T5Wrapper(merged, tokenizer).save(os.path.join(ckpdir, ft_name))
+        else:
+            model.save(os.path.join(ckpdir, ft_name))
 
     return zs_path, ft_path
 
@@ -172,12 +216,18 @@ def finetune(args):
 if __name__ == "__main__":
     args = parse_arguments()
 
-    # Set default training hyperparameters matching ties-merging t5_base config
+    # Set default training hyperparameters matching ties-merging configs
     args.lr = 1e-4
     args.wd = 0.0
-    args.batch_size = 256
-    args.num_grad_accumulation = 4
     args.max_seq_len = 128
+    # Keep effective batch size ~1024 regardless of model size
+    _batch_defaults = {
+        "t5-base": (256, 4),
+        "t5-large": (64, 16),
+    }
+    _bs, _ga = _batch_defaults.get(args.model, (64, 16))
+    args.batch_size = _bs
+    args.num_grad_accumulation = _ga
     args.num_batches = 75000
     args.checkpoint_frequency = 100
     args.print_every = 10
@@ -192,6 +242,16 @@ if __name__ == "__main__":
         "winogrande",
         "wsc",
     ]
+
+    # Append model name to save directory
+    if args.save is None:
+        args.save = f"checkpoints/{args.model}"
+    else:
+        args.save = os.path.join(args.save, args.model)
+
+    # Append seed to save directory
+    if args.seed is not None:
+        args.save = os.path.join(args.save, f"seed_{args.seed}")
 
     for dataset in T5_DATASETS:
         args.train_dataset = dataset

@@ -3,7 +3,10 @@ import os
 
 from src.language.args import parse_arguments
 from src.language.eval import evaluate_task_vector, evaluate_task_vector_at_coef
-from src.language.task_vectors import LanguageLinearizedTaskVector, LanguageNonLinearTaskVector
+from src.language.task_vectors import (
+    LanguageLinearizedTaskVector,
+    LanguageNonLinearTaskVector,
+)
 from src.utils import find_optimal_coef
 
 T5_DATASETS = ["qasc", "wiki_qa", "quartz", "paws", "story_cloze", "winogrande", "wsc"]
@@ -19,7 +22,9 @@ elif args.finetuning_mode == "linear":
     ft_accuracies_path = os.path.join(args.save, "linear_ft_accuracies.json")
 else:
     print(f"Evaluating {args.finetuning_mode} models.")
-    ft_accuracies_path = os.path.join(args.save, f"{args.finetuning_mode}_ft_accuracies.json")
+    ft_accuracies_path = os.path.join(
+        args.save, f"{args.finetuning_mode}_ft_accuracies.json"
+    )
 print("*" * 100)
 
 with open(ft_accuracies_path) as f:
@@ -35,11 +40,15 @@ for dataset in T5_DATASETS:
     if args.finetuning_mode == "linear":
         pretrained_checkpoint = f"{args.save}/{dataset}/linear_zeroshot.pt"
         finetuned_checkpoint = f"{args.save}/{dataset}/linear_finetuned.pt"
-        task_vector = -LanguageLinearizedTaskVector(pretrained_checkpoint, finetuned_checkpoint)
+        task_vector = -LanguageLinearizedTaskVector(
+            pretrained_checkpoint, finetuned_checkpoint
+        )
     else:
         pretrained_checkpoint = f"{args.save}/{dataset}/zeroshot.pt"
         finetuned_checkpoint = f"{args.save}/{dataset}/finetuned.pt"
-        task_vector = -LanguageNonLinearTaskVector(pretrained_checkpoint, finetuned_checkpoint)
+        task_vector = -LanguageNonLinearTaskVector(
+            pretrained_checkpoint, finetuned_checkpoint
+        )
 
     # Phase 1: choose optimal coefficient on validation split
     args.eval_datasets = [dataset]

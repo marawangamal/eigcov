@@ -66,7 +66,9 @@ def compute_covs(encoder, dataset_name, args):
 
     cobjs, handles = register_hooks(
         model,
-        args,
+        cov_device=args.cov_device,
+        cov_type=args.cov_type,
+        cov_estimator=args.cov_estimator,
         extra_module_types=(
             mhap.MultiHeadAttentionPacked,
             mhas.MultiHeadAttentionSplit,
