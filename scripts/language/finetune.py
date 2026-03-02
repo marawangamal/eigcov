@@ -179,14 +179,12 @@ def finetune(args):
             if val_acc > best_val_acc:
                 best_val_acc = val_acc
                 num_bad_checkpoints = 0
-                if lora_finetuning:
-                    merged = model.transformer.merge_and_unload()
-                    T5Wrapper(merged, tokenizer).save(os.path.join(ckpdir, ft_name))
-                else:
+                if not lora_finetuning:
                     model.save(os.path.join(ckpdir, ft_name))
                 saved_best = True
                 print(
-                    f"New best val acc: {100 * best_val_acc:.2f}% — checkpoint saved.",
+                    f"New best val acc: {100 * best_val_acc:.2f}%"
+                    + ("" if lora_finetuning else " — checkpoint saved."),
                     flush=True,
                 )
             else:
@@ -198,17 +196,16 @@ def finetune(args):
                 )
             if num_bad_checkpoints >= patience:
                 print(f"Early stopping at step {step}.", flush=True)
-                return zs_path, ft_path
+                break
             model.train()
 
-    # If early stopping never fired, save the final model
-    if not saved_best:
+    # Merge LoRA and save once at the end (following vision script pattern)
+    if lora_finetuning:
+        model.transformer = model.transformer.merge_and_unload()
+        model.save(os.path.join(ckpdir, ft_name))
+    elif not saved_best:
         eval_single_dataset("validation", model, tokenizer, train_dataset, args)
-        if lora_finetuning:
-            merged = model.transformer.merge_and_unload()
-            T5Wrapper(merged, tokenizer).save(os.path.join(ckpdir, ft_name))
-        else:
-            model.save(os.path.join(ckpdir, ft_name))
+        model.save(os.path.join(ckpdir, ft_name))
 
     return zs_path, ft_path
 

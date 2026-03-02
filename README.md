@@ -2,6 +2,8 @@
 
 ## TODO
 - [ ] Move src/args.py => src/vision/args.py
+- [ ] Migrate hashes for vision, remove cov path if not regmean method
+- [ ] Add fisher method
 
 ## Setup
 

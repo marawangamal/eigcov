@@ -15,9 +15,9 @@
 # export PYTHONPATH="$PYTHONPATH:$PWD"
 # export SSL_CERT_DIR=/etc/ssl/certs
 
-MODELS=(t5-base)
-METHODS=(regmean)
-FT_MODES=(lora)
+MODELS=(t5-large)
+METHODS=(regmean tsv eigcov isoc_mean sum mean)
+FT_MODES=(standard)
 RESULTS_DB="results/results.jsonl"
 NUM_BATCHES=10
 BATCH_SIZE=32
