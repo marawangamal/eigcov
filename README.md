@@ -1,10 +1,5 @@
 # Covariance Estimation using Task Matrices
 
-## TODO
-- [ ] Move src/args.py => src/vision/args.py
-- [ ] Migrate hashes for vision, remove cov path if not regmean method
-- [ ] Add fisher method
-
 ## Setup
 
 ```sh
@@ -30,20 +25,17 @@ python scripts/vision/finetune.py \
   --save=$SCRATCH/eigcov/checkpoints/vision 
 ```
 
-Options for `--finetuning-mode`: `standard`, `lora`, `linear`, `posthoc`.
-
 ### 2. Evaluate single model (zeroshot / standard / linear / lora)
-
 ```sh
 python scripts/vision/eval_single_task.py \
-  --finetuning-mode=lora \
+  --finetuning-mode=standard \
   --model=ViT-B-32 \
   --openclip-cachedir=$SCRATCH/openclip \
   --data-location=$SLURM_TMPDIR/datasets
 ```
 
 ### 3. Evaluate merged models
-**NOTE:** Must run single task script in (2) first.
+**NOTE:** Must run `eval_single_task.py` in (2) with zeroshot and standard before merging methods can be evaluated using the commands below.
 
 ```sh
 # EigenCov (data-free)
@@ -77,26 +69,12 @@ python scripts/vision/covariance.py \
 ### Reproducing Vision Experiments
 To reproduce vision experiments simply run the following commands. The results will be saved to `results/results.jsonl`
 ```sh
-bash scripts/vision/train.sh
-bash scripts/vision/eval.sh
-```
-
-### Reproducing gradient orientation experiments
-```sh
-python scripts/vision/finetune.py \
-  --finetuning-mode=standard \
-  --model=ViT-B-16 \
-  --world-size=1 \
-  --num-workers=1 \
-  --openclip-cachedir=$SCRATCH/openclip \
-  --data-location=$SLURM_TMPDIR/datasets \
-  --save=$SCRATCH/eigcov/checkpoints/vision \
-  --cosine-samples=128
+bash scripts/vision/vision_train.sh
+bash scripts/vision/vision_eval.sh
 ```
 
 ## Language Experiments
 ### 1. Fine-tune
-
 ```sh
 python scripts/language/finetune.py \
   --finetuning-mode=standard \
@@ -112,7 +90,8 @@ python scripts/language/eval_single_task.py \
 ```
 
 ### 3. Evaluate merged models
-**NOTE:** Must run single task script in (2) first.
+**NOTE:** Must run `eval_single_task.py` in (2) with zeroshot and standard before merging methods can be evaluated using the commands below.
+
 ```sh
 python scripts/language/eval_task_addition.py \
   --model=t5-base --finetuning-mode=standard --merge-func=eigcov --save=$SCRATCH/eigcov/checkpoints/language
@@ -159,49 +138,3 @@ scripts/                      # Entry points (run directly)
     ├── eval_task_addition.py
     └── eval_task_negation.py
 ```
-
-
-## Overview of Language Experiments
-
-**Model: T5**(encoder-decoder)                                                                                                                                                  
-
-t5-base is a seq2seq (encoder-decoder) transformer. The encoder reads the input prompt, the decoder generates the output. It's NOT a causal/decoder-only LM like GPT — it was
-  pretrained on span-corruption (masking spans and predicting them), but the lm-adapt variants were further trained on language modeling.                                     
-                
-
-**What's being tested**
-
-All 7 datasets (qasc, wiki_qa, quartz, paws, story_cloze, winogrande, wsc) are multiple-choice classification tasks. During eval, the model doesn't generate text — instead
-it scores each candidate answer by computing the log probability of the decoder producing that answer string given the encoded input:
-
-score(choice_i) = sum of log P(token | context) over all tokens in choice_i
-
-The predicted answer is argmax over all choices. This is called rank classification or closed-form eval — much faster and more reliable than generation.
-
-During training, it's standard cross-entropy on the correct answer text (teacher forcing).
-
-
-**Prompt templating: promptsource, not HF chat templates**
-
-It's completely different from HF chat templates. promptsource (from the BigScience T0 paper) is a library of hand-written Jinja2 templates that convert structured dataset
-fields into natural language. Each dataset has multiple templates written by crowd workers.
-
-For example, for qasc a template might look like:
-
-**Jinja2 template**
-
-{{fact1}} {{fact2}} Based on these facts, {{question}}
-- {{choices[0]}}
-- {{choices[1]}}
-...
-Answer: ||| {{choices[answer_idx]}}
-
-The ||| separator splits input from target. So for a concrete example:
-
-Input:  "Magnets attract certain metals. Iron is a metal. Based on these facts,
-          what do magnets attract? - Iron - Wood - Plastic"
-Target: "Iron"
-
-HF chat templates in contrast add structural tokens (<|system|>, <|user|>, <|assistant|>) and are designed for instruction-tuned conversational models. Promptsource
-templates are purely natural language reformulations with no special tokens — the task is framed as a fill-in-the-blank text completion problem, which fits T5's seq2seq
-pretraining naturally.
