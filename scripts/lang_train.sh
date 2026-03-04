@@ -15,7 +15,7 @@ source "$SCRATCH/eigcov/.venv/bin/activate"
 export PYTHONPATH="$PYTHONPATH:$PWD"
 export SSL_CERT_DIR=/etc/ssl/certs
 
-MODELS=(t5-base)
+MODELS=(t5-large)
 FT_MODES=(lora)
 
 for MODEL in "${MODELS[@]}"; do
