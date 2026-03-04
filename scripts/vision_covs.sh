@@ -16,7 +16,7 @@ if [ ! -d "$SLURM_TMPDIR/datasets" ]; then
 fi
 
 MODELS=(ViT-B-16)
-FT_MODES=(lora standard)
+FT_MODES=(standard)
 BATCH_SIZE=1
 NUM_BATCHES="1,10,100,500,1000"
 
