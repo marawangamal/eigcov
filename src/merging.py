@@ -280,7 +280,7 @@ def merge_fisher(
         km = v.param_key_to_cov_key(key)
         fpath = v.fisher_path
         if fpath is None:
-            raise ValueError(f"No fisher matrix path provided for task vector {v}")
+            raise ValueError(f"No fisher path provided for task vector {v}")
         with np.load(fpath) as fdict:
             if km not in fdict:
                 print(f"[skipped] {km} not found in {fpath}")
@@ -288,7 +288,9 @@ def merge_fisher(
             f.append(fdict[km])
 
     # Shape: (N, Do*Di)
-    f = torch.stack([torch.as_tensor(x, device=tau.device, dtype=tau.dtype) for x in f])
+    f = torch.stack(
+        [torch.as_tensor(x.reshape(-1), device=tau.device, dtype=tau.dtype) for x in f]
+    )
     return _dinv(f.sum(dim=0)) * (f * tau.reshape(N, Do * Di)).sum(dim=0)
 
 

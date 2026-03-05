@@ -43,7 +43,7 @@ from src import mhap, mhas
 from src.covariance import OnlineCovariance, register_hooks
 
 
-def compute_covs(encoder, dataset_name, args):
+def compute_covs(encoder, dataset_name, args, on_batch=None, on_end=None):
     classification_head = get_classification_head(args, dataset_name)
     model = ImageClassifier(encoder, classification_head)
     model.freeze_head()
@@ -59,7 +59,7 @@ def compute_covs(encoder, dataset_name, args):
         num_workers=args.num_workers,
     )
     split = args.cov_split
-    max_num_batches = args.cov_num_batches
+    max_num_batches = max(args.cov_num_batches)
     loader = dataset.train_loader if split == "train" else dataset.test_loader
     dataset_size = len(loader.dataset)
     print(f"    {dataset_size} samples (split={split})")
@@ -90,16 +90,15 @@ def compute_covs(encoder, dataset_name, args):
             model.zero_grad()
             _ = loss_fn(model(images), labels)
             n_batches += 1
-    if max_num_batches is not None:
-        print(f"    Used {n_batches} batches (cov_num_batches={max_num_batches})")
+            if on_batch is not None:
+                on_batch(cobjs, n_batches)
+    print(f"    Used {n_batches} batches (max={max_num_batches})")
 
-    for h in handles:
-        h.remove()
-    model.cpu()
     del model, dataset, loader, handles
     gc.collect()
 
-    return cobjs
+    if on_end is not None:
+        on_end(cobjs)
 
 
 if __name__ == "__main__":
@@ -108,36 +107,38 @@ if __name__ == "__main__":
     args.model_device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     args.cov_device = torch.device("cpu")
 
-    tasks = [
-        "Cars",
-        "DTD",
-        "EuroSAT",
-        "GTSRB",
-        "MNIST",
-        "RESISC45",
-        "SUN397",
-        "SVHN",
-    ]
+    all_tasks = ["Cars", "DTD", "EuroSAT", "GTSRB", "MNIST", "RESISC45", "SUN397", "SVHN"]
+    tasks = args.eval_datasets if args.eval_datasets is not None else all_tasks
 
-    ss_num_batches = args.cov_num_batches if args.cov_num_batches is not None else "all"
+    ss_num_batches = max(args.cov_num_batches)
     ss_batch_size = args.cov_batch_size
     ss_type = args.cov_type
     ss_attn = args.mha
     ss_split = args.cov_split
     ss_estimator = args.cov_estimator
-    ss_fm = args.finetuning_mode
+    ss_fm = Path(args.load).stem if args.load is not None else args.finetuning_mode
     cov_dir = f"results/{args.model}/covariances_s{ss_split}_n{ss_num_batches}_b{ss_batch_size}_t{ss_type}_attn{ss_attn}_e{ss_estimator}_ft{ss_fm}"
     os.makedirs(cov_dir, exist_ok=True)
+
+    def make_cov_dir(n):
+        return f"results/{args.model}/covariances_s{ss_split}_n{n}_b{ss_batch_size}_t{ss_type}_attn{ss_attn}_e{ss_estimator}_ft{ss_fm}"
 
     print(f"Covariance directory: {cov_dir}")
     for task in tasks:
         cov_path = f"{cov_dir}/covariance_{task}.npz"
-        if os.path.exists(cov_path) and not args.overwrite:
+        all_cached = all(
+            os.path.exists(f"{make_cov_dir(n)}/covariance_{task}.npz")
+            for n in args.cov_num_batches
+        )
+        if all_cached and not args.overwrite:
             print(f"Skipping {task} (cached)")
             continue
 
         print(f"\nCollecting covariance for {task}")
-        if args.finetuning_mode == "linear":
+        if args.load is not None:
+            # Direct checkpoint path supplied via --load; skip task-vector construction.
+            encoder = torch.load(args.load, map_location="cpu", weights_only=False)
+        elif args.finetuning_mode == "linear":
             pretrained_checkpoint = f"{args.save}/{task}Val/linear_zeroshot.pt"
             finetuned_checkpoint = f"{args.save}/{task}Val/linear_finetuned.pt"
             pretrained_nonlinear_checkpoint = f"{args.save}/{task}Val/zeroshot.pt"
@@ -157,6 +158,7 @@ if __name__ == "__main__":
             encoder = tv.apply_to_nonlinear(
                 pretrained_nonlinear_checkpoint, param_names, scaling_coef=1.0
             )
+            del tv
         elif args.finetuning_mode == "lora":
             pretrained_checkpoint = f"{args.save}/{task}Val/zeroshot.pt"
             finetuned_checkpoint = f"{args.save}/{task}Val/lora_finetuned.pt"
@@ -165,6 +167,7 @@ if __name__ == "__main__":
                 finetuned_checkpoint,
             )
             encoder = tv.apply_to(pretrained_checkpoint, scaling_coef=1.0)
+            del tv
         else:
             pretrained_checkpoint = f"{args.save}/{task}Val/zeroshot.pt"
             finetuned_checkpoint = f"{args.save}/{task}Val/finetuned.pt"
@@ -173,8 +176,7 @@ if __name__ == "__main__":
                 finetuned_checkpoint,
             )
             encoder = tv.apply_to(pretrained_checkpoint, scaling_coef=1.0)
-
-        del tv
+            del tv
 
         # swap mha
         if args.mha is not None:
@@ -184,19 +186,38 @@ if __name__ == "__main__":
             }[args.mha]
             encoder = swap_fn(encoder)
 
-        cobjs = compute_covs(encoder, f"{task}Val", args)
+        thresholds = set(n for n in args.cov_num_batches if n < ss_num_batches)
+
+        def on_batch(cobjs, n_batches):
+            if n_batches in thresholds:
+                snap_path = f"{make_cov_dir(n_batches)}/covariance_{task}.npz"
+                os.makedirs(os.path.dirname(snap_path), exist_ok=True)
+                snap = {
+                    k: v.cov.cpu().numpy() if isinstance(v, OnlineCovariance) else v
+                    for k, v in cobjs.items()
+                }
+                snap.update(
+                    {
+                        f"{k}_n": v.n
+                        for k, v in cobjs.items()
+                        if isinstance(v, OnlineCovariance)
+                    }
+                )
+                np.savez(snap_path, **snap)
+                print(f"  Saved snapshot (n={n_batches}) to {snap_path}")
+
+        def on_end(cobjs):
+            # Convert cobjs to saveable arrays (np.savez can't save tuples of inhomogeneous shapes)
+            # two loops to save memory
+            for lname in list(cobjs):
+                cobjs[f"{lname}_n"] = cobjs[lname].n
+            saveable = {
+                k: v.cov.cpu().numpy() if isinstance(v, OnlineCovariance) else v
+                for k, v in cobjs.items()
+            }
+            np.savez(cov_path, **saveable)
+            print(f"  Saved to {cov_path}")
+
+        compute_covs(encoder, f"{task}Val", args, on_batch=on_batch, on_end=on_end)
         del encoder
-
-        # Convert cobjs to saveable arrays (np.savez can't save tuples of inhomogeneous shapes)
-        # two loops to save memory
-        for lname in list(cobjs):
-            cobjs[f"{lname}_n"] = cobjs[lname].n
-        cobjs: Dict = {
-            k: v.cov.cpu().numpy() if isinstance(v, OnlineCovariance) else v
-            for k, v in cobjs.items()
-        }
-
-        np.savez(cov_path, **cobjs)
-        print(f"  Saved to {cov_path}")
-        del cobjs
         gc.collect()
