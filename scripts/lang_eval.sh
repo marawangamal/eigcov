@@ -23,9 +23,9 @@ BATCH_SIZE=32
 # Only evaluate TA (sum) since other methods do not require HP tuning.
 # Results are written to a separate database to avoid mixing with the
 # default runs.
-MODELS=(t5-base t5-large)
+MODELS=(t5-base)
 METHODS=(sum)
-FT_MODES=(standard)
+FT_MODES=(lora)
 RESULTS_DB="results/results-hpopt.jsonl"
 COEFF_START=0.0
 COEFF_END=1.0
