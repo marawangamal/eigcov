@@ -10,15 +10,15 @@
 set -euo pipefail
 mkdir -p logs
 
-# # # 0. Setup environment
-# # source "$SCRATCH/eigcov/.venv/bin/activate"
-# export PYTHONPATH="$PYTHONPATH:$PWD"
-# export SSL_CERT_DIR=/etc/ssl/certs
+# 0. Setup environment
+source "$SCRATCH/eigcov/.venv/bin/activate"
+export PYTHONPATH="$PYTHONPATH:$PWD"
+export SSL_CERT_DIR=/etc/ssl/certs
 
-# if [ ! -d "$SLURM_TMPDIR/datasets" ]; then
-#   cp vit_datasets_08.zip "$SLURM_TMPDIR/"
-#   unzip -q "$SLURM_TMPDIR/vit_datasets_08.zip" -d "$SLURM_TMPDIR/"
-# fi
+if [ ! -d "$SLURM_TMPDIR/datasets" ]; then
+  cp vit_datasets_08.zip "$SLURM_TMPDIR/"
+  unzip -q "$SLURM_TMPDIR/vit_datasets_08.zip" -d "$SLURM_TMPDIR/"
+fi
 
 # # ── Option A: train all models/modes, no intermediate checkpoints (default) ──
 # MODELS=(ViT-B-16 ViT-B-32 ViT-L-14)
@@ -42,7 +42,8 @@ for MODEL in "${MODELS[@]}"; do
     --num-workers=1 \
     --checkpoint-every="$CHECKPOINT_EVERY" \
     --openclip-cachedir="$SCRATCH/openclip" \
-    --data-location="$SLURM_TMPDIR/datasets"
+    --data-location="$SLURM_TMPDIR/datasets" \
+    --save="$SCRATCH/eigcov/checkpoints-v2"
 
   done
 done

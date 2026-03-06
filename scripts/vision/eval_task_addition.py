@@ -38,6 +38,7 @@ _HASH_IGNORE = {
     "cosine_samples",
     "grad_cross_ip",
     "grad_cross_matrix",
+    "eigcov_reverse",
     "lora_rank",
     "lora_alpha",
     "lora_dropout",

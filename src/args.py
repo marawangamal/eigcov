@@ -279,6 +279,12 @@ def parse_arguments():
         default=None,
         help="Training step of the intermediate checkpoint used for eigcov covariance (e.g. 500).",
     )
+    parser.add_argument(
+        "--eigcov-reverse",
+        action="store_true",
+        default=False,
+        help="Use Delta = W_k - W_0 instead of Delta = W_T - W_k for eigcov covariance.",
+    )
     parsed_args = parser.parse_args()
     parsed_args.device = "cuda" if torch.cuda.is_available() else "cpu"
 

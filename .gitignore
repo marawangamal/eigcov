@@ -166,3 +166,5 @@ cython_debug/
 .misc
 .claude
 results_tmp
+CLAUDE.md
+EXPERIMENTS.md

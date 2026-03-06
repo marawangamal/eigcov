@@ -67,7 +67,8 @@ if __name__ == "__main__":
 
     datasets = args.eval_datasets if args.eval_datasets is not None else ALL_DATASETS
 
-    cov_dir = f"results/{args.model}/covariances_eigcov_k{args.mid_checkpoint_step}_ft{args.finetuning_mode}"
+    reverse_suffix = "_rev" if args.eigcov_reverse else ""
+    cov_dir = f"results/{args.model}/covariances_eigcov_k{args.mid_checkpoint_step}_ft{args.finetuning_mode}{reverse_suffix}"
     os.makedirs(cov_dir, exist_ok=True)
     print(f"Covariance directory: {cov_dir}")
 
@@ -80,24 +81,38 @@ if __name__ == "__main__":
             ft_path = f"{dataset_dir}/finetuned.pt"
         mid_path = f"{dataset_dir}/checkpoint_{args.mid_checkpoint_step}.pt"
 
-        if not os.path.exists(ft_path):
-            print(f"[skip] {ft_path} not found")
-            continue
+        if args.eigcov_reverse:
+            # Delta = W_k - W_0
+            zs_path = f"{dataset_dir}/zeroshot.pt"
+            if not os.path.exists(zs_path):
+                print(f"[skip] {zs_path} not found")
+                continue
+        else:
+            # Delta = W_T - W_k
+            if not os.path.exists(ft_path):
+                print(f"[skip] {ft_path} not found")
+                continue
         if not os.path.exists(mid_path):
             print(f"[skip] {mid_path} not found")
             continue
 
         print(f"Processing {dataset} ...")
-        ft_sd = load_state_dict(ft_path)
         mid_sd = load_state_dict(mid_path)
+        if args.eigcov_reverse:
+            ref_sd = load_state_dict(zs_path)
+        else:
+            ref_sd = load_state_dict(ft_path)
 
         covs = {}
-        for key in ft_sd:
-            if ft_sd[key].dtype in (torch.int64, torch.uint8):
+        for key in mid_sd:
+            if mid_sd[key].dtype in (torch.int64, torch.uint8):
                 continue
-            if ft_sd[key].ndim != 2:
+            if mid_sd[key].ndim != 2:
                 continue
-            delta = (ft_sd[key] - mid_sd[key]).float()
+            if args.eigcov_reverse:
+                delta = (mid_sd[key] - ref_sd[key]).float()  # W_k - W_0
+            else:
+                delta = (ref_sd[key] - mid_sd[key]).float()  # W_T - W_k
             cov_key = param_key_to_cov_key(key)
             covs[cov_key] = (delta.T @ delta).numpy()
 
@@ -105,5 +120,5 @@ if __name__ == "__main__":
         np.savez(cov_path, **covs)
         print(f"  Saved {len(covs)} covariance matrices -> {cov_path}")
 
-        del ft_sd, mid_sd
+        del ref_sd, mid_sd
         torch.cuda.empty_cache()
