@@ -267,6 +267,12 @@ def parse_arguments():
             "Requires batch_size=1. Saves results to {ckpdir}/grad_cross_ip.pt."
         ),
     )
+    parser.add_argument(
+        "--mid-checkpoint-step",
+        type=int,
+        default=None,
+        help="Training step of the intermediate checkpoint used for eigcov covariance (e.g. 500).",
+    )
     parsed_args = parser.parse_args()
     parsed_args.device = "cuda" if torch.cuda.is_available() else "cpu"
 

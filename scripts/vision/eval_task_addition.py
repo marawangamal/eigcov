@@ -59,6 +59,7 @@ _HASH_IGNORE = {
     "overwrite",
     "num_workers",
     "device",
+    "mid_checkpoint_step",
 }
 
 _run_hash = (
