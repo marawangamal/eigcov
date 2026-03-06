@@ -8,8 +8,8 @@
 #SBATCH --error=logs/%x_%j.err
 
 # ─── Configuration ────────────────────────────────────────────────────────────
-MODEL="ViT-L-14"
-DATASET="Cars"
+MODEL="ViT-B-16"
+DATASET="MNIST"
 ROOTDIR="$SCRATCH/eigcov"   # repo root on the cluster
 
 NUM_BATCHES=10

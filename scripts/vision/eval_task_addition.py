@@ -36,6 +36,7 @@ _HASH_IGNORE = {
     "port",
     "world_size",
     "cosine_samples",
+    "grad_cross_ip",
     "lora_rank",
     "lora_alpha",
     "lora_dropout",

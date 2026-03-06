@@ -167,11 +167,19 @@ def finetune(rank, args):
         )
         ddp_model.module.image_encoder.save(model_path)
 
+    # Cross-sample gradient IP tracking (condition i of Covariance Estimation Theorem)
+    if args.grad_cross_ip and is_main_process():
+        _grad_sum = None  # lazily initialized on first step (size = #params with grad)
+        _grad_sq_norm_sum = 0.0  # sum_k ||g_k||^2
+        _K = 0
+
     run_start_time = time.perf_counter()
     for epoch in range(args.epochs):
         ddp_model.train()
 
         for i, batch in enumerate(ddp_loader):
+            # if args.grad_cross_ip and i >= 100:
+            #     break
             start_time = time.time()
 
             step = (
@@ -189,6 +197,20 @@ def finetune(rank, args):
             loss = loss_fn(logits, labels)
 
             loss.backward()
+
+            if args.grad_cross_ip and is_main_process():
+                g = torch.cat(
+                    [
+                        p.grad.detach().cpu().view(-1).float()
+                        for p in ddp_model.module.parameters()
+                        if p.requires_grad and p.grad is not None
+                    ]
+                )
+                if _grad_sum is None:
+                    _grad_sum = torch.zeros_like(g)
+                _grad_sum += g
+                _grad_sq_norm_sum += g.dot(g).item()
+                _K += 1
 
             if (i + 1) % args.num_grad_accumulation == 0:
                 scheduler(step)
@@ -226,6 +248,29 @@ def finetune(rank, args):
                     f"Elapsed {_format_duration(run_elapsed)}",  # noqa: E501
                     flush=True,
                 )
+
+    if args.grad_cross_ip and is_main_process() and _K > 1:
+        grad_sum_sq = _grad_sum.dot(_grad_sum).item()
+        mean_self_ip = _grad_sq_norm_sum / _K
+        mean_cross_ip = (grad_sum_sq - _grad_sq_norm_sum) / (_K * (_K - 1))
+        normalized = mean_cross_ip / mean_self_ip
+        print("\n=== Cross-sample gradient orthogonality (condition i) ===")
+        print(f"  Steps K                  : {_K}")
+        print(f"  mean ||g_k||^2           : {mean_self_ip:.6e}   <- self IP")
+        print(f"  mean g_k^T g_k' (k!=k') : {mean_cross_ip:.6e}   <- cross IP")
+        print(f"  normalized cross-IP      : {normalized:.6e}   <- ~0 if orthogonal")
+        os.makedirs(ckpdir, exist_ok=True)
+        torch.save(
+            {
+                "K": _K,
+                "mean_self_ip": mean_self_ip,
+                "mean_cross_ip": mean_cross_ip,
+                "normalized_cross_ip": normalized,
+                "grad_sum": _grad_sum,
+                "grad_sq_norm_sum": _grad_sq_norm_sum,
+            },
+            os.path.join(ckpdir, "grad_cross_ip.pt"),
+        )
 
     # FIXME: Make this work with DDP.
     if is_main_process():
@@ -294,7 +339,8 @@ if __name__ == "__main__":
     for dataset in train_datasets:
         # HACK: Some command line arguments are overwritten by defaults here.
         args.lr = 1e-5
-        args.epochs = epochs[dataset]
+        if not args.grad_cross_ip:
+            args.epochs = epochs[dataset]
         args.train_dataset = dataset + "Val"
 
         # We use gradient accumulation to simulate larger batch sizes if the model does not fit in memory.

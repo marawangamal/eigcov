@@ -258,6 +258,15 @@ def parse_arguments():
             "using the first N trainable parameter tensors. Results saved to {ckpdir}/cosine_sim.npz."
         ),
     )
+    parser.add_argument(
+        "--grad-cross-ip",
+        action="store_true",
+        default=False,
+        help=(
+            "Track cross-sample gradient inner product E[g_k^T g_k'] for k!=k' during training. "
+            "Requires batch_size=1. Saves results to {ckpdir}/grad_cross_ip.pt."
+        ),
+    )
     parsed_args = parser.parse_args()
     parsed_args.device = "cuda" if torch.cuda.is_available() else "cpu"
 
