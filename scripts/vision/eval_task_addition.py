@@ -197,23 +197,28 @@ def _set_eval_split(split):
 _set_eval_split(args.eval_val_split)
 args.eval_max_batches = getattr(args, "eval_val_max_batches", None)
 print("=" * 100)
-print(
-    f"PHASE 1: SPLIT={args.eval_val_split.upper()} — choosing optimal coefficient"
-    + (f" (max {args.eval_max_batches} batches)" if args.eval_max_batches else "")
-)
-print("=" * 100)
-val_metrics = evaluate_task_vector(
-    task_vector,
-    pretrained_checkpoint,
-    args,
-    posthoc_linearization=args.finetuning_mode == "posthoc",
-)
+if args.coeff_start == args.coeff_end:
+    optimal_coef = args.coeff_start
+    val_metrics = {}
+    print(f"PHASE 1: SKIPPED (single coefficient {optimal_coef})")
+else:
+    print(
+        f"PHASE 1: SPLIT={args.eval_val_split.upper()} — choosing optimal coefficient"
+        + (f" (max {args.eval_max_batches} batches)" if args.eval_max_batches else "")
+    )
+    print("=" * 100)
+    val_metrics = evaluate_task_vector(
+        task_vector,
+        pretrained_checkpoint,
+        args,
+        posthoc_linearization=args.finetuning_mode == "posthoc",
+    )
 
-optimal_coef = find_optimal_coef(
-    val_metrics,
-    metric="avg_normalized_top1",
-    minimize=False,
-)
+    optimal_coef = find_optimal_coef(
+        val_metrics,
+        metric="avg_normalized_top1",
+        minimize=False,
+    )
 print(f"Optimal coefficient (from phase 1): {optimal_coef}")
 
 # Phase 2: evaluate at optimal coefficient on eval-test-split (use all batches).
