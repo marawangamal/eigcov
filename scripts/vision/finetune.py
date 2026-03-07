@@ -57,6 +57,7 @@ def finetune(rank, args):
         zs_path = os.path.join(args.save, train_dataset, "zeroshot.pt")
     if os.path.exists(zs_path) and os.path.exists(ft_path) and not args.overwrite:
         print(f"Skipping fine-tuning because {ft_path} already exists.")
+        cleanup_ddp()
         return zs_path, ft_path
 
     assert train_dataset is not None, "Please provide a training dataset."
@@ -370,6 +371,7 @@ def finetune(rank, args):
             zs_path = os.path.join(ckpdir, "zeroshot.pt")
             ft_path = os.path.join(ckpdir, "finetuned.pt")
         image_encoder.save(ft_path)
+        cleanup_ddp()
         return zs_path, ft_path
 
     cleanup_ddp()
