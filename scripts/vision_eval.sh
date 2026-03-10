@@ -28,28 +28,29 @@ fi
 NUM_BATCHES=10
 BATCH_SIZE=32
 
-# ===== Hyperparameter-optimized experiments =====
-# Only evaluate TA (sum) since other methods do not require HP tuning.
-# Results are written to a separate database to avoid mixing with the
-# default runs.
-MODELS=(ViT-B-16 ViT-B-32 ViT-L-14)
-METHODS=(sum)
-FT_MODES=(lora)
-RESULTS_DB="results/results-hpopt.jsonl"
-COEFF_START=0.0
-COEFF_END=1.0
-N_EVAL_POINTS=11
+# # ===== Hyperparameter-optimized experiments =====
+# # Only evaluate TA (sum) since other methods do not require HP tuning.
+# # Results are written to a separate database to avoid mixing with the
+# # default runs.
+# MODELS=(ViT-B-16 ViT-B-32 ViT-L-14)
+# METHODS=(sum)
+# FT_MODES=(lora)
+# RESULTS_DB="results/results-hpopt.jsonl"
+# COEFF_START=0.0
+# COEFF_END=1.0
+# N_EVAL_POINTS=11
 
 # ===== Default experiments (no hyperparameter tuning) =====
 # Evaluate all merging methods using their default settings.
 # Results are stored in the main results database.
-# MODELS=(ViT-B-16 ViT-B-32 ViT-L-14)
+MODELS=(ViT-B-16)
 # METHODS=(eigcov isoc_mean knots_isoc_mean tsv knots_tsv regmean sum mean)
-# FT_MODES=(lora standard)
-# RESULTS_DB="results/results.jsonl"
-# COEFF_START=1.0
-# COEFF_END=1.0
-# N_EVAL_POINTS=1
+METHODS=(eigcov_weighted)
+FT_MODES=(standard)
+RESULTS_DB="results/results.jsonl"
+COEFF_START=1.0
+COEFF_END=1.0
+N_EVAL_POINTS=1
 
 
 for MODEL in "${MODELS[@]}"; do

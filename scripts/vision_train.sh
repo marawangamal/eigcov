@@ -47,7 +47,7 @@ for MODEL in "${MODELS[@]}"; do
       --checkpoint-every="$CHECKPOINT_EVERY" \
       --openclip-cachedir="$OPENCLIP_DIR" \
       --data-location="$DATA_DIR" \
-      --save="$SCRATCH/eigcov/checkpoints-v2"
+      --save="$SCRATCH/eigcov/checkpoints"
 
   done
 done

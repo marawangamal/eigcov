@@ -2,7 +2,7 @@
 #SBATCH --job-name=finetune_lang_models
 #SBATCH --partition=main
 #SBATCH --gres=gpu:a100l:1
-#SBATCH --cpus-per-task=16
+#SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
 #SBATCH --time=08:00:00
 #SBATCH --output=logs/%x_%j.out
@@ -19,8 +19,8 @@ export SSL_CERT_DIR=/etc/ssl/certs
 
 HF_CACHE_DIR="$SCRATCH/hf_cache"
 
-MODELS=(t5-base t5-large)
-FT_MODES=(standard lora)
+MODELS=(t5-large)
+FT_MODES=(lora)
 
 for MODEL in "${MODELS[@]}"; do
   for FT_MODE in "${FT_MODES[@]}"; do

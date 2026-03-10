@@ -1,0 +1,62 @@
+T5Wrapper(
+  (transformer): T5ForConditionalGeneration(
+    (shared): Embedding(32128, 768)
+    (encoder): T5Stack(
+      (embed_tokens): Embedding(32128, 768)
+      (block): ModuleList(
+        (0): T5Block(
+          (layer): ModuleList(
+            (0): T5LayerSelfAttention(
+              (SelfAttention): T5Attention(
+                (q): Linear(in_features=768, out_features=768, bias=False)
+                (k): Linear(in_features=768, out_features=768, bias=False)
+                (v): Linear(in_features=768, out_features=768, bias=False)
+                (o): Linear(in_features=768, out_features=768, bias=False)
+                (relative_attention_bias): Embedding(32, 12)
+              )
+              (layer_norm): T5LayerNorm()
+              (dropout): Dropout(p=0.1, inplace=False)
+            )
+            (1): T5LayerFF(
+              (DenseReluDense): T5DenseActDense(
+                (wi): Linear(in_features=768, out_features=3072, bias=False)
+                (wo): Linear(in_features=3072, out_features=768, bias=False)
+                (dropout): Dropout(p=0.1, inplace=False)
+                (act): ReLU()
+...
+    )
+    (lm_head): Linear(in_features=768, out_features=32128, bias=False)
+  )
+)
+
+ImageClassifier(
+  (image_encoder): ImageEncoder(
+    (model): CLIP(
+      (visual): VisionTransformer(
+        (conv1): Conv2d(3, 768, kernel_size=(16, 16), stride=(16, 16), bias=False)
+        (patch_dropout): Identity()
+        (ln_pre): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+        (transformer): Transformer(
+          (resblocks): ModuleList(
+            (0-11): 12 x ResidualAttentionBlock(
+              (ln_1): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+              (attn): MultiheadAttention(
+                (out_proj): NonDynamicallyQuantizableLinear(in_features=768, out_features=768, bias=True)
+              )
+              (ls_1): Identity()
+              (ln_2): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+              (mlp): Sequential(
+                (c_fc): Linear(in_features=768, out_features=3072, bias=True)
+                (gelu): GELU(approximate='none')
+                (c_proj): Linear(in_features=3072, out_features=768, bias=True)
+              )
+              (ls_2): Identity()
+            )
+          )
+        )
+...
+    )
+  )
+  (classification_head): ClassificationHead(in_features=512, out_features=43, bias=True)
+)
+Output is truncated. View as a scrollable element or open in a text editor. Adjust cell output settings...

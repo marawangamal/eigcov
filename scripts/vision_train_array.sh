@@ -3,8 +3,8 @@
 #SBATCH --array=0-5
 #SBATCH --partition=main
 #SBATCH --gres=gpu:rtx8000:1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=32G
+#SBATCH --cpus-per-task=2
+#SBATCH --mem=16GB
 #SBATCH --time=08:00:00
 #SBATCH --output=logs/%x_%A_%a.out
 #SBATCH --error=logs/%x_%A_%a.err
@@ -44,3 +44,9 @@ python scripts/vision/finetune.py \
   --openclip-cachedir="$SCRATCH/openclip" \
   --data-location="$SLURM_TMPDIR/datasets" \
   --save="$SCRATCH/eigcov/checkpoints-v2"
+
+
+
+# EXPERIMENT LOG:
+# 2026-03-08 07:00 - 8904571_[0-3] 
+# squeue -u marawan.gamal -o "%.18i %.12u %.10P %.40j %.2t %.19S %.10M %.6D %.8C %.20R"

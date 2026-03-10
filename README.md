@@ -151,3 +151,14 @@ scripts/                      # Entry points (run directly)
     ├── eval_task_addition.py
     └── eval_task_negation.py
 ```
+
+
+## NLG Experiments
+```bash
+# Setup
+module load cuda/12.6 arrow python/3.12 httpproxy
+git clone https://github.com/allenai/olmes.git
+cd olmes
+uv sync
+uv sync --group gpu # for vLLM support
+```
