@@ -164,3 +164,7 @@ cython_debug/
 .vscode/sftp.json
 *.zip
 .misc
+.claude
+results_tmp
+CLAUDE.md
+EXPERIMENTS.md

@@ -280,7 +280,7 @@ def merge_fisher(
         km = v.param_key_to_cov_key(key)
         fpath = v.fisher_path
         if fpath is None:
-            raise ValueError(f"No fisher matrix path provided for task vector {v}")
+            raise ValueError(f"No fisher path provided for task vector {v}")
         with np.load(fpath) as fdict:
             if km not in fdict:
                 print(f"[skipped] {km} not found in {fpath}")
@@ -288,7 +288,9 @@ def merge_fisher(
             f.append(fdict[km])
 
     # Shape: (N, Do*Di)
-    f = torch.stack([torch.as_tensor(x, device=tau.device, dtype=tau.dtype) for x in f])
+    f = torch.stack(
+        [torch.as_tensor(x.reshape(-1), device=tau.device, dtype=tau.dtype) for x in f]
+    )
     return _dinv(f.sum(dim=0)) * (f * tau.reshape(N, Do * Di)).sum(dim=0)
 
 
@@ -300,7 +302,75 @@ def _get_eigcov(d: torch.Tensor, *args, **kwargs):
     return c
 
 
-def merge_eigcov(d: torch.Tensor, *args, **kwargs):
+def merge_eigcov(d: torch.Tensor, lam: float = 0.0, *args, **kwargs):
     # c = d.transpose(1, 2) @ d
     c = _get_eigcov(d)
-    return (d @ c).sum(dim=0) @ pinv(c.sum(dim=0))
+    # return (d @ c).sum(dim=0) @ pinv(c.sum(dim=0))
+    if lam > 0:
+        cbar = c.sum(dim=0) + lam * torch.eye(
+            c.shape[1], c.shape[2], device=c.device, dtype=c.dtype
+        )
+    else:
+        cbar = c.sum(dim=0)
+    return (d @ c).sum(dim=0) @ pinv(cbar)
+
+
+def merge_eigcov_weighted(d: torch.Tensor, lam: float = 0.0, *args, **kwargs):
+    c = _get_eigcov(d)
+    # Add regularization
+    gam = 1 / torch.linalg.norm(d, ord="fro", dim=(-2, -1), keepdim=True)
+    # Normalize gam
+    gam = gam / gam.sum(dim=0)
+    if lam > 0:
+        cbar = (c * gam).sum(dim=0) + lam * torch.eye(
+            c.shape[1], c.shape[2], device=c.device, dtype=c.dtype
+        )
+    else:
+        cbar = (c * gam).sum(dim=0)
+    print(f"gam: {gam}")
+    return (gam * d @ c).sum(dim=0) @ pinv(cbar)
+
+
+merge_eigcov_weighted_01 = lambda *args, **kwargs: merge_eigcov_weighted(
+    *args, lam=0.1, **kwargs
+)
+merge_eigcov_weighted_02 = lambda *args, **kwargs: merge_eigcov_weighted(
+    *args, lam=0.2, **kwargs
+)
+merge_eigcov_weighted_03 = lambda *args, **kwargs: merge_eigcov_weighted(
+    *args, lam=0.3, **kwargs
+)
+merge_eigcov_weighted_04 = lambda *args, **kwargs: merge_eigcov_weighted(
+    *args, lam=0.4, **kwargs
+)
+merge_eigcov_weighted_05 = lambda *args, **kwargs: merge_eigcov_weighted(
+    *args, lam=0.5, **kwargs
+)
+merge_eigcov_weighted_06 = lambda *args, **kwargs: merge_eigcov_weighted(
+    *args, lam=0.6, **kwargs
+)
+merge_eigcov_weighted_07 = lambda *args, **kwargs: merge_eigcov_weighted(
+    *args, lam=0.7, **kwargs
+)
+merge_eigcov_weighted_08 = lambda *args, **kwargs: merge_eigcov_weighted(
+    *args, lam=0.8, **kwargs
+)
+merge_eigcov_weighted_09 = lambda *args, **kwargs: merge_eigcov_weighted(
+    *args, lam=0.9, **kwargs
+)
+merge_eigcov_weighted_10 = lambda *args, **kwargs: merge_eigcov_weighted(
+    *args, lam=1.0, **kwargs
+)
+
+merge_eigcov_005 = lambda *args, **kwargs: merge_eigcov(*args, lam=0.05, **kwargs)
+merge_eigcov_001 = lambda *args, **kwargs: merge_eigcov(*args, lam=0.01, **kwargs)
+merge_eigcov_01 = lambda *args, **kwargs: merge_eigcov(*args, lam=0.1, **kwargs)
+merge_eigcov_02 = lambda *args, **kwargs: merge_eigcov(*args, lam=0.2, **kwargs)
+merge_eigcov_03 = lambda *args, **kwargs: merge_eigcov(*args, lam=0.3, **kwargs)
+merge_eigcov_04 = lambda *args, **kwargs: merge_eigcov(*args, lam=0.4, **kwargs)
+merge_eigcov_05 = lambda *args, **kwargs: merge_eigcov(*args, lam=0.5, **kwargs)
+merge_eigcov_06 = lambda *args, **kwargs: merge_eigcov(*args, lam=0.6, **kwargs)
+merge_eigcov_07 = lambda *args, **kwargs: merge_eigcov(*args, lam=0.7, **kwargs)
+merge_eigcov_08 = lambda *args, **kwargs: merge_eigcov(*args, lam=0.8, **kwargs)
+merge_eigcov_09 = lambda *args, **kwargs: merge_eigcov(*args, lam=0.9, **kwargs)
+merge_eigcov_10 = lambda *args, **kwargs: merge_eigcov(*args, lam=1.0, **kwargs)

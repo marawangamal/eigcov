@@ -12,6 +12,7 @@ class _TaskVector(abc.ABC):
         lazy=False,
         cache_window=50,  # Keeps `cache_window` layers in memory at a time
         covariance_path=None,
+        fisher_path=None,
         _transform_fn=None,
     ):
         """Initializes the task vector from a pretrained and a finetuned checkpoints.
@@ -26,6 +27,7 @@ class _TaskVector(abc.ABC):
         self.cache_window = cache_window
         self._cache = {}
         self.covariance_path = covariance_path
+        self.fisher_path = fisher_path
         self._transform_fn = _transform_fn
         if vector is not None:
             assert not self.lazy, "Cannot pass a vector if lazy is True"
@@ -125,7 +127,7 @@ class _TaskVector(abc.ABC):
                     continue
                 new_vector[key] = self.vector[key] + other.vector[key]
         return self.__class__(
-            vector=new_vector, covariance_path=self.covariance_path, lazy=self.lazy
+            vector=new_vector, covariance_path=self.covariance_path, fisher_path=self.fisher_path, lazy=self.lazy
         )
 
     def __sub__(self, other):
@@ -144,7 +146,7 @@ class _TaskVector(abc.ABC):
             for key in self.vector:
                 new_vector[key] = -self.vector[key]
         return self.__class__(
-            vector=new_vector, covariance_path=self.covariance_path, lazy=self.lazy
+            vector=new_vector, covariance_path=self.covariance_path, fisher_path=self.fisher_path, lazy=self.lazy
         )
 
     def __pow__(self, power):
@@ -154,7 +156,7 @@ class _TaskVector(abc.ABC):
             for key in self.vector:
                 new_vector[key] = self.vector[key] ** power
         return self.__class__(
-            vector=new_vector, covariance_path=self.covariance_path, lazy=self.lazy
+            vector=new_vector, covariance_path=self.covariance_path, fisher_path=self.fisher_path, lazy=self.lazy
         )
 
     def __mul__(self, other):
@@ -164,7 +166,7 @@ class _TaskVector(abc.ABC):
             for key in self.vector:
                 new_vector[key] = other * self.vector[key]
         return self.__class__(
-            vector=new_vector, covariance_path=self.covariance_path, lazy=self.lazy
+            vector=new_vector, covariance_path=self.covariance_path, fisher_path=self.fisher_path, lazy=self.lazy
         )
 
     def dot(self, other):
@@ -211,12 +213,14 @@ class _TaskVector(abc.ABC):
                 finetuned_checkpoint=self._finetuned_checkpoint,
                 lazy=True,
                 covariance_path=self.covariance_path,
+                fisher_path=self.fisher_path,
                 _transform_fn=composed,
             )
         with torch.no_grad():
             return self.__class__(
                 vector=fn(self.vector),
                 covariance_path=self.covariance_path,
+                fisher_path=self.fisher_path,
                 lazy=False,
             )
 

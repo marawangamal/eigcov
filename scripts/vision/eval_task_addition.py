@@ -24,27 +24,59 @@ else:
 #   - metadata (results_db path, exp_name, overwrite flag, …)
 _HASH_IGNORE = {
     # training-only
-    "lr", "wd", "ls", "warmup_length", "epochs", "num_grad_accumulation", "batch_size",
-    "checkpoint_every", "keep_checkpoints", "port", "world_size", "cosine_samples",
-    "lora_rank", "lora_alpha", "lora_dropout", "lora_target_modules", "lora_target_parameters",
+    "lr",
+    "wd",
+    "ls",
+    "warmup_length",
+    "epochs",
+    "num_grad_accumulation",
+    "batch_size",
+    "checkpoint_every",
+    "keep_checkpoints",
+    "port",
+    "world_size",
+    "cosine_samples",
+    "grad_cross_matrix",
+    "eigcov_reverse",
+    "lora_rank",
+    "lora_alpha",
+    "lora_dropout",
+    "lora_target_modules",
+    "lora_target_parameters",
     # environment / paths
-    "openclip_cachedir", "cache_dir", "save", "data_location",
+    "openclip_cachedir",
+    "cache_dir",
+    "save",
+    "data_location",
     # dynamically set after hash
-    "eval_datasets", "finetuning_accuracies", "control_dataset", "eval_split", "eval_max_batches",
+    "eval_datasets",
+    "finetuning_accuracies",
+    "control_dataset",
+    "eval_split",
+    "eval_max_batches",
     # metadata
-    "results_db", "exp_name", "overwrite", "num_workers", "device",
+    "results_db",
+    "exp_name",
+    "overwrite",
+    "num_workers",
+    "device",
+    "mid_checkpoint_step",
 }
 
-_run_hash = make_run_hash("eval_task_addition", args, ignore=_HASH_IGNORE) if args.results_db else None
+_run_hash = (
+    make_run_hash("eval_task_addition", args, ignore=_HASH_IGNORE)
+    if args.results_db
+    else None
+)
 if args.results_db and record_exists(args.results_db, _run_hash):
     print(f"Skipping: matching record already exists in {args.results_db}")
     exit(0)
 
-print("-" * 100)
-print("DEBUG:")
-print(f"Record to be saved: {_run_hash}")
-print(json.dumps({"script": "eval_task_addition", **args_to_dict(args)}, indent=4))
-print("-" * 100)
+# print("-" * 100)
+# print("DEBUG:")
+# print(f"Record to be saved: {_run_hash}")
+# print(json.dumps({"script": "eval_task_addition", **args_to_dict(args)}, indent=4))
+# print("-" * 100)
 
 print("*" * 100)
 if args.finetuning_mode == "standard":
@@ -81,9 +113,18 @@ eval_datasets = [
 ]
 
 task_vectors = []
+merge_name = getattr(args, "merge_func", "sum")
 
 for dataset in eval_datasets:
-    cov_path = f"{args.cov_dir}/covariance_{dataset}.npz" if args.cov_dir else None
+    is_fisher = merge_name == "fisher"
+    cov_path = (
+        f"{args.cov_dir}/covariance_{dataset}.npz"
+        if args.cov_dir and not is_fisher
+        else None
+    )
+    fisher_path = (
+        f"{args.cov_dir}/fisher_{dataset}.npz" if args.cov_dir and is_fisher else None
+    )
     if args.finetuning_mode == "linear":
         pretrained_checkpoint = f"{args.save}/{dataset}Val/linear_zeroshot.pt"
         finetuned_checkpoint = f"{args.save}/{dataset}Val/linear_finetuned.pt"
@@ -92,6 +133,7 @@ for dataset in eval_datasets:
                 pretrained_checkpoint,
                 finetuned_checkpoint,
                 covariance_path=cov_path,
+                fisher_path=fisher_path,
             )
         )
     elif args.finetuning_mode == "lora":
@@ -102,6 +144,7 @@ for dataset in eval_datasets:
                 pretrained_checkpoint,
                 finetuned_checkpoint,
                 covariance_path=cov_path,
+                fisher_path=fisher_path,
             )
         )
     else:
@@ -112,6 +155,7 @@ for dataset in eval_datasets:
                 pretrained_checkpoint,
                 finetuned_checkpoint,
                 covariance_path=cov_path,
+                fisher_path=fisher_path,
             )
         )
     print(f"Task vector {dataset} loaded")
@@ -127,7 +171,6 @@ if args.mha is not None:
     }[args.mha]
     task_vectors = [t.map(copy_fn) for t in task_vectors]
 
-merge_name = getattr(args, "merge_func", "sum")
 task_vector = combine_task_vectors(task_vectors, merge_name, args)
 
 if args.mha is not None:
@@ -154,23 +197,28 @@ def _set_eval_split(split):
 _set_eval_split(args.eval_val_split)
 args.eval_max_batches = getattr(args, "eval_val_max_batches", None)
 print("=" * 100)
-print(
-    f"PHASE 1: SPLIT={args.eval_val_split.upper()} — choosing optimal coefficient"
-    + (f" (max {args.eval_max_batches} batches)" if args.eval_max_batches else "")
-)
-print("=" * 100)
-val_metrics = evaluate_task_vector(
-    task_vector,
-    pretrained_checkpoint,
-    args,
-    posthoc_linearization=args.finetuning_mode == "posthoc",
-)
+if args.coeff_start == args.coeff_end:
+    optimal_coef = args.coeff_start
+    val_metrics = {}
+    print(f"PHASE 1: SKIPPED (single coefficient {optimal_coef})")
+else:
+    print(
+        f"PHASE 1: SPLIT={args.eval_val_split.upper()} — choosing optimal coefficient"
+        + (f" (max {args.eval_max_batches} batches)" if args.eval_max_batches else "")
+    )
+    print("=" * 100)
+    val_metrics = evaluate_task_vector(
+        task_vector,
+        pretrained_checkpoint,
+        args,
+        posthoc_linearization=args.finetuning_mode == "posthoc",
+    )
 
-optimal_coef = find_optimal_coef(
-    val_metrics,
-    metric="avg_normalized_top1",
-    minimize=False,
-)
+    optimal_coef = find_optimal_coef(
+        val_metrics,
+        metric="avg_normalized_top1",
+        minimize=False,
+    )
 print(f"Optimal coefficient (from phase 1): {optimal_coef}")
 
 # Phase 2: evaluate at optimal coefficient on eval-test-split (use all batches).

@@ -16,6 +16,86 @@ from src.vision.modeling import ImageClassifier, ImageEncoder, apply_lora, merge
 from src.utils import LabelSmoothing, cosine_lr
 
 
+class GradCrossTermTracker:
+    """Measures per-layer gradient cross-term error during training.
+
+    For a subset of evenly-spaced linear layers, accumulates per-sample
+    gradient statistics across batches:
+      - grad_sum:  batch-mean of per-sample gradients, summed over batches  (Σ_k G^(k))
+      - gram_sum:  batch-mean of per-sample G^T G, summed over batches      (Σ_k S^(k))
+
+    At the end of training, compares cosine distance between grad_sum^T @ grad_sum and gram_sum.
+    """
+
+    def __init__(self, model, max_layers=8):
+        linear_layers = [
+            (name, module)
+            for name, module in model.named_modules()
+            if isinstance(module, torch.nn.Linear)
+        ]
+        n = len(linear_layers)
+        num_tracked = min(max_layers, n)
+        indices = (
+            [round(i * (n - 1) / (num_tracked - 1)) for i in range(num_tracked)]
+            if num_tracked > 1
+            else [0]
+        )
+        self.layers = {linear_layers[i][0]: linear_layers[i][1] for i in indices}
+        self.grad_sum = {name: None for name in self.layers}
+        self.gram_sum = {name: None for name in self.layers}
+        self.num_batches = 0
+
+        print(f"\n=== Tracking {len(self.layers)} layers for grad cross-terms ===")
+        for name, module in self.layers.items():
+            print(f"  {name}: weight {tuple(module.weight.shape)}")
+        print()
+
+    def step(self, model, inputs, labels, loss_fn):
+        """Compute per-sample gradients for one batch and accumulate statistics."""
+        batch_size = inputs.shape[0]
+        for b in range(batch_size):
+            model.zero_grad()
+            logits = model(inputs[b : b + 1])
+            loss = loss_fn(logits, labels[b : b + 1])
+            loss.backward()
+
+            for name, module in self.layers.items():
+                g = module.weight.grad.detach().float()  # (d_out, d_in)
+                if self.grad_sum[name] is None:
+                    d_in = g.shape[1]
+                    self.grad_sum[name] = torch.zeros_like(g, device="cpu")
+                    self.gram_sum[name] = torch.zeros(d_in, d_in, dtype=torch.float32)
+                self.grad_sum[name] += g.cpu() / batch_size
+                self.gram_sum[name] += (g.T @ g).cpu() / batch_size
+
+        self.num_batches += 1
+        model.zero_grad()
+
+    def save(self, ckpdir):
+        """Print summary and save per-layer results to disk."""
+        if self.num_batches <= 1:
+            return
+        K = self.num_batches
+        print(f"\n=== Per-layer gradient cross-term error [K={K}] ===")
+        os.makedirs(ckpdir, exist_ok=True)
+        for name in self.layers:
+            M = self.grad_sum[name]
+            S = self.gram_sum[name]
+            MtM = M.T @ M
+            a, b = MtM.flatten(), S.flatten()
+            cos_dist = 1 - torch.dot(a, b).abs() / (a.norm() * b.norm())
+            print(f"  {name}:")
+            print(f"    ||M^T M||_F  = {MtM.norm().item():.6e}")
+            print(f"    ||S||_F      = {S.norm().item():.6e}")
+            print(f"    cos distance = {cos_dist.item():.6e}")
+            fname = f"grad_cross_matrix_{name.replace('.', '_')}.pt"
+            torch.save(
+                {"K": K, "M": M, "S_sum": S, "M_T_M": MtM, "cos_dist": cos_dist.item()},
+                os.path.join(ckpdir, fname),
+            )
+        print()
+
+
 def _format_duration(seconds: float) -> str:
     seconds_int = max(0, int(seconds))
     hours = seconds_int // 3600
@@ -57,6 +137,7 @@ def finetune(rank, args):
         zs_path = os.path.join(args.save, train_dataset, "zeroshot.pt")
     if os.path.exists(zs_path) and os.path.exists(ft_path) and not args.overwrite:
         print(f"Skipping fine-tuning because {ft_path} already exists.")
+        cleanup_ddp()
         return zs_path, ft_path
 
     assert train_dataset is not None, "Please provide a training dataset."
@@ -167,6 +248,10 @@ def finetune(rank, args):
         )
         ddp_model.module.image_encoder.save(model_path)
 
+    grad_cross_tracker = None
+    if args.grad_cross_matrix and is_main_process():
+        grad_cross_tracker = GradCrossTermTracker(ddp_model.module.image_encoder)
+
     run_start_time = time.perf_counter()
     for epoch in range(args.epochs):
         ddp_model.train()
@@ -183,6 +268,9 @@ def finetune(rank, args):
             inputs = batch["images"].cuda()
             labels = batch["labels"].cuda()
             data_time = time.time() - start_time
+
+            if grad_cross_tracker is not None:
+                grad_cross_tracker.step(ddp_model.module, inputs, labels, loss_fn)
 
             logits = ddp_model(inputs)
 
@@ -227,6 +315,9 @@ def finetune(rank, args):
                     flush=True,
                 )
 
+    if grad_cross_tracker is not None:
+        grad_cross_tracker.save(ckpdir)
+
     # FIXME: Make this work with DDP.
     if is_main_process():
         # We only need to evaluate the model on the first GPU.
@@ -249,6 +340,7 @@ def finetune(rank, args):
             zs_path = os.path.join(ckpdir, "zeroshot.pt")
             ft_path = os.path.join(ckpdir, "finetuned.pt")
         image_encoder.save(ft_path)
+        cleanup_ddp()
         return zs_path, ft_path
 
     cleanup_ddp()
@@ -294,7 +386,8 @@ if __name__ == "__main__":
     for dataset in train_datasets:
         # HACK: Some command line arguments are overwritten by defaults here.
         args.lr = 1e-5
-        args.epochs = epochs[dataset]
+        if not args.grad_cross_matrix:
+            args.epochs = epochs[dataset]
         args.train_dataset = dataset + "Val"
 
         # We use gradient accumulation to simulate larger batch sizes if the model does not fit in memory.

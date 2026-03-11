@@ -112,6 +112,19 @@ bash scripts/vision/vision_train.sh
 bash scripts/vision/vision_eval.sh
 ```
 
+### Generate gradient accumulators
+```sh
+python scripts/vision/finetune.py \
+    --model ViT-B-16 \
+    --train-dataset MNIST \
+    --finetuning-mode standard \
+    --batch-size 1 \
+    --epochs 1 \
+    --grad-cross-ip \
+    --data-location $SLURM_TMPDIR/datasets \
+    --save checkpoints-accum
+```
+
 ## Language Experiments
 ### 1. Fine-tune
 ```sh
@@ -181,4 +194,15 @@ scripts/                      # Entry points (run directly)
     ├── eval_single_task.py   # Evaluate single fine-tuned model
     ├── eval_task_addition.py
     └── eval_task_negation.py
+```
+
+
+## NLG Experiments
+```bash
+# Setup
+module load cuda/12.6 arrow python/3.12 httpproxy
+git clone https://github.com/allenai/olmes.git
+cd olmes
+uv sync
+uv sync --group gpu # for vLLM support
 ```

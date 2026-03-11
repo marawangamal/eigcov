@@ -88,9 +88,12 @@ with open(os.path.join(args.save, "zeroshot_accuracies.json")) as f:
 
 eval_datasets = list(T5_DATASETS)
 task_vectors = []
+merge_name = getattr(args, "merge_func", "sum")
 
 for dataset in eval_datasets:
-    cov_path = f"{args.cov_dir}/covariance_{dataset}.npz" if args.cov_dir else None
+    is_fisher = merge_name == "fisher"
+    cov_path = f"{args.cov_dir}/covariance_{dataset}.npz" if args.cov_dir and not is_fisher else None
+    fisher_path = f"{args.cov_dir}/fisher_{dataset}.npz" if args.cov_dir and is_fisher else None
     if args.finetuning_mode == "linear":
         pretrained_checkpoint = f"{args.save}/{dataset}/linear_zeroshot.pt"
         finetuned_checkpoint = f"{args.save}/{dataset}/linear_finetuned.pt"
@@ -99,6 +102,7 @@ for dataset in eval_datasets:
                 pretrained_checkpoint,
                 finetuned_checkpoint,
                 covariance_path=cov_path,
+                fisher_path=fisher_path,
             )
         )
     else:
@@ -109,11 +113,11 @@ for dataset in eval_datasets:
                 pretrained_checkpoint,
                 finetuned_checkpoint,
                 covariance_path=cov_path,
+                fisher_path=fisher_path,
             )
         )
     print(f"Task vector {dataset} loaded")
 
-merge_name = getattr(args, "merge_func", "sum")
 task_vector = combine_task_vectors(task_vectors, merge_name, args)
 
 args.control_dataset = None

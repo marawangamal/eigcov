@@ -182,7 +182,7 @@ def parse_arguments():
     )
     parser.add_argument(
         "--cov-dir",
-        type=str,
+        type=lambda x: None if x == "None" else x,
         default=None,
         help=(
             "Directory of per-dataset covariance .npz files produced by scripts/covariance.py. "
@@ -199,9 +199,9 @@ def parse_arguments():
     )
     parser.add_argument(
         "--cov-num-batches",
-        type=int,
-        default=10,
-        help="Max number of batches for covariance collection (default: 10).",
+        type=lambda x: [int(v) for v in x.split(",")],
+        default=[10],
+        help="Max number of batches for covariance collection. Comma-separated list for multiple snapshots, e.g. '1,10,100,500,1000' (default: 10).",
     )
     parser.add_argument(
         "--cov-batch-size",
@@ -257,6 +257,24 @@ def parse_arguments():
             "If > 0, track cosine similarity between consecutive optimizer-step gradients "
             "using the first N trainable parameter tensors. Results saved to {ckpdir}/cosine_sim.npz."
         ),
+    )
+    parser.add_argument(
+        "--grad-cross-matrix",
+        action="store_true",
+        default=False,
+        help="Per-layer matrix measurement of gradient cross-term condition (i).",
+    )
+    parser.add_argument(
+        "--mid-checkpoint-step",
+        type=int,
+        default=None,
+        help="Training step of the intermediate checkpoint used for eigcov covariance (e.g. 500).",
+    )
+    parser.add_argument(
+        "--eigcov-reverse",
+        action="store_true",
+        default=False,
+        help="Use Delta = W_k - W_0 instead of Delta = W_T - W_k for eigcov covariance.",
     )
     parsed_args = parser.parse_args()
     parsed_args.device = "cuda" if torch.cuda.is_available() else "cpu"
