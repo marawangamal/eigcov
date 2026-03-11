@@ -104,6 +104,20 @@ python scripts/vision/covariance.py \
 ```
 **NOTE:** `--mha`: `split` Splits q,k,v into separate linear modules so their activation covariances can be collected (otherwise will be ignored).
 
+### Generate covariance matrices at multiple sample counts
+```sh
+python scripts/vision/covariance.py \
+  --model=ViT-B-16 \
+  --cov-split=train \
+  --cov-num-batches=1,10,100,500,1000 \
+  --cov-batch-size=1 \
+  --mha=split \
+  --cov-type=sm \
+  --cov-estimator=full \
+  --openclip-cachedir=$SCRATCH/openclip \
+  --data-location=$SLURM_TMPDIR/datasets
+```
+
 
 ### Reproducing Vision Experiments
 To reproduce vision experiments simply run the following commands. The results will be saved to `results/results.jsonl`
@@ -198,8 +212,29 @@ scripts/                      # Entry points (run directly)
 
 
 ## NLG Experiments
+
+### 1. Fine-tune
+```sh
+# Multi-GPU full fine-tune with FSDP (required for 8B full fine-tune)
+torchrun --nproc_per_node=4 scripts/nlg/finetune.py \
+  --capability math --fsdp \
+  --output-dir $SCRATCH/eigcov/checkpoints/nlg \
+  --hf-cache-dir $SCRATCH/huggingface
+
+# All capabilities
+torchrun --nproc_per_node=4 scripts/nlg/finetune.py \
+  --capability all --fsdp \
+  --output-dir $SCRATCH/eigcov/checkpoints/nlg \
+  --hf-cache-dir $SCRATCH/huggingface
+
+# Single GPU with LoRA (lower memory)
+python scripts/nlg/finetune.py \
+  --capability math --use-lora \
+  --hf-cache-dir $SCRATCH/huggingface
+```
+
+### Setup (olmes evaluation)
 ```bash
-# Setup
 module load cuda/12.6 arrow python/3.12 httpproxy
 git clone https://github.com/allenai/olmes.git
 cd olmes

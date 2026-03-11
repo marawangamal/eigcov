@@ -302,23 +302,99 @@ def _get_eigcov(d: torch.Tensor, *args, **kwargs):
     return c
 
 
-def merge_eigcov(d: torch.Tensor, lam: float = 0.0, *args, **kwargs):
-    # c = d.transpose(1, 2) @ d
-    c = _get_eigcov(d)
-    # return (d @ c).sum(dim=0) @ pinv(c.sum(dim=0))
+def merge_eigcov(d: torch.Tensor, *args, **kwargs):
+    c = d.transpose(1, 2) @ d
+    return (d @ c).sum(dim=0) @ pinv(c.sum(dim=0))
+
+
+def merge_eigcov_fnorm(d: torch.Tensor, *args, **kwargs):
+    c = d.transpose(1, 2) @ d
+    c = c / (torch.linalg.norm(c, ord="fro", dim=(-2, -1), keepdim=True) ** 2)
+    return (d @ c).sum(dim=0) @ pinv(c.sum(dim=0))
+
+
+def merge_eigcov_lstsq(d: torch.Tensor, lam=0.0, *args, **kwargs):
+    # d: (T, Do, Di)
+    c = d.transpose(1, 2) @ d  # c: (T, Di, Di)
+
+    T, Do, Di = d.shape
+
+    # # alpha_t = 1 / ||d[t]||_F
+    # alpha = 1.0 / d.flatten(1).norm(dim=1)  # (T,)
+    # sqrt_alpha = alpha.sqrt()  # (T,)
+
+    sqrt_alpha = 1.0 / d.flatten(1).norm(dim=1)  # (T,)
+
+    # Factor each C_t = L_t L_t^T
+    e, v = torch.linalg.eigh(c)  # e: (T, Di), v: (T, Di, Di)
+    e = e.clamp(min=1e-8)
+    L = v * e.sqrt().unsqueeze(-2)  # (T, Di, Di)
+    Lt = L.transpose(-2, -1)  # (T, Di, Di)
+
+    # Scale by sqrt(alpha_t)
+    Lt_scaled = sqrt_alpha[:, None, None] * Lt  # (T, Di, Di)
+
+    A = Lt_scaled.reshape(T * Di, Di)  # (T*Di, Di)
+    B = (Lt_scaled @ d.transpose(-1, -2)).reshape(T * Di, Do)  # (T*Di, Do)
+
+    # Ridge regularization
     if lam > 0:
-        cbar = c.sum(dim=0) + lam * torch.eye(
-            c.shape[1], c.shape[2], device=c.device, dtype=c.dtype
-        )
-    else:
-        cbar = c.sum(dim=0)
-    return (d @ c).sum(dim=0) @ pinv(cbar)
+        A = torch.cat([A, lam**0.5 * torch.eye(Di, Di, device=A.device)], dim=0)
+        B = torch.cat([B, torch.zeros(Di, Do, device=B.device)], dim=0)
+
+    # Solve A @ X = B where X = W^T
+    result = torch.linalg.lstsq(A, B)
+    W = result.solution.T  # (Do, Di)
+
+    return W
 
 
-def merge_eigcov_weighted(d: torch.Tensor, lam: float = 0.0, *args, **kwargs):
+merge_eigcov_lstsq_00001 = lambda *args, **kwargs: merge_eigcov_lstsq(
+    *args, lam=0.0001, **kwargs
+)
+merge_eigcov_lstsq_0001 = lambda *args, **kwargs: merge_eigcov_lstsq(
+    *args, lam=0.001, **kwargs
+)
+merge_eigcov_lstsq_001 = lambda *args, **kwargs: merge_eigcov_lstsq(
+    *args, lam=0.01, **kwargs
+)
+merge_eigcov_lstsq_005 = lambda *args, **kwargs: merge_eigcov_lstsq(
+    *args, lam=0.05, **kwargs
+)
+merge_eigcov_lstsq_01 = lambda *args, **kwargs: merge_eigcov_lstsq(
+    *args, lam=0.1, **kwargs
+)
+merge_eigcov_lstsq_02 = lambda *args, **kwargs: merge_eigcov_lstsq(
+    *args, lam=0.2, **kwargs
+)
+merge_eigcov_lstsq_03 = lambda *args, **kwargs: merge_eigcov_lstsq(
+    *args, lam=0.3, **kwargs
+)
+merge_eigcov_lstsq_04 = lambda *args, **kwargs: merge_eigcov_lstsq(
+    *args, lam=0.4, **kwargs
+)
+merge_eigcov_lstsq_05 = lambda *args, **kwargs: merge_eigcov_lstsq(
+    *args, lam=0.5, **kwargs
+)
+
+# def merge_eigcov_lstsq(d: torch.Tensor, *args, **kwargs):
+#     # c = d.transpose(1, 2) @ d
+#     c = _get_eigcov(d)
+#     # eigen decomp
+#     e, v = torch.linalg.eigh(c)
+#     if lam > 0:
+#         cbar = c.sum(dim=0) + lam * torch.eye(
+#             c.shape[1], c.shape[2], device=c.device, dtype=c.dtype
+#         )
+#     else:
+#         cbar = c.sum(dim=0)
+#     return (d @ c).sum(dim=0) @ pinv(cbar)
+
+
+def merge_eigcov_weighted_v1(d: torch.Tensor, lam: float = 0.0, *args, **kwargs):
     c = _get_eigcov(d)
     # Add regularization
-    gam = 1 / torch.linalg.norm(d, ord="fro", dim=(-2, -1), keepdim=True)
+    gam = 1 / torch.linalg.norm(d, ord="fro", dim=(-2, -1), keepdim=True) ** 2
     # Normalize gam
     gam = gam / gam.sum(dim=0)
     if lam > 0:
@@ -362,15 +438,29 @@ merge_eigcov_weighted_10 = lambda *args, **kwargs: merge_eigcov_weighted(
     *args, lam=1.0, **kwargs
 )
 
-merge_eigcov_005 = lambda *args, **kwargs: merge_eigcov(*args, lam=0.05, **kwargs)
-merge_eigcov_001 = lambda *args, **kwargs: merge_eigcov(*args, lam=0.01, **kwargs)
-merge_eigcov_01 = lambda *args, **kwargs: merge_eigcov(*args, lam=0.1, **kwargs)
-merge_eigcov_02 = lambda *args, **kwargs: merge_eigcov(*args, lam=0.2, **kwargs)
-merge_eigcov_03 = lambda *args, **kwargs: merge_eigcov(*args, lam=0.3, **kwargs)
-merge_eigcov_04 = lambda *args, **kwargs: merge_eigcov(*args, lam=0.4, **kwargs)
-merge_eigcov_05 = lambda *args, **kwargs: merge_eigcov(*args, lam=0.5, **kwargs)
-merge_eigcov_06 = lambda *args, **kwargs: merge_eigcov(*args, lam=0.6, **kwargs)
-merge_eigcov_07 = lambda *args, **kwargs: merge_eigcov(*args, lam=0.7, **kwargs)
-merge_eigcov_08 = lambda *args, **kwargs: merge_eigcov(*args, lam=0.8, **kwargs)
-merge_eigcov_09 = lambda *args, **kwargs: merge_eigcov(*args, lam=0.9, **kwargs)
-merge_eigcov_10 = lambda *args, **kwargs: merge_eigcov(*args, lam=1.0, **kwargs)
+
+def _merge_eigcov_shr(d: torch.Tensor, lam: float = 0.0, *args, **kwargs):
+    # c = d.transpose(1, 2) @ d
+    c = _get_eigcov(d)
+    # return (d @ c).sum(dim=0) @ pinv(c.sum(dim=0))
+    if lam > 0:
+        cbar = c.sum(dim=0) + lam * torch.eye(
+            c.shape[1], c.shape[2], device=c.device, dtype=c.dtype
+        )
+    else:
+        cbar = c.sum(dim=0)
+    return (d @ c).sum(dim=0) @ pinv(cbar)
+
+
+merge_eigcov_005 = lambda *args, **kwargs: _merge_eigcov_shr(*args, lam=0.05, **kwargs)
+merge_eigcov_001 = lambda *args, **kwargs: _merge_eigcov_shr(*args, lam=0.01, **kwargs)
+merge_eigcov_01 = lambda *args, **kwargs: _merge_eigcov_shr(*args, lam=0.1, **kwargs)
+merge_eigcov_02 = lambda *args, **kwargs: _merge_eigcov_shr(*args, lam=0.2, **kwargs)
+merge_eigcov_03 = lambda *args, **kwargs: _merge_eigcov_shr(*args, lam=0.3, **kwargs)
+merge_eigcov_04 = lambda *args, **kwargs: _merge_eigcov_shr(*args, lam=0.4, **kwargs)
+merge_eigcov_05 = lambda *args, **kwargs: _merge_eigcov_shr(*args, lam=0.5, **kwargs)
+merge_eigcov_06 = lambda *args, **kwargs: _merge_eigcov_shr(*args, lam=0.6, **kwargs)
+merge_eigcov_07 = lambda *args, **kwargs: _merge_eigcov_shr(*args, lam=0.7, **kwargs)
+merge_eigcov_08 = lambda *args, **kwargs: _merge_eigcov_shr(*args, lam=0.8, **kwargs)
+merge_eigcov_09 = lambda *args, **kwargs: _merge_eigcov_shr(*args, lam=0.9, **kwargs)
+merge_eigcov_10 = lambda *args, **kwargs: _merge_eigcov_shr(*args, lam=1.0, **kwargs)

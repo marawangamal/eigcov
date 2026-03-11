@@ -6,10 +6,19 @@ which can later be merged using scripts/nlg/merge.py.
 Uses allenai/tulu-3-sft-mixture (939k examples with 'messages' + 'source' columns),
 filtered by source to isolate each capability.
 
+
 Usage:
-    python scripts/nlg/finetune.py --capability math --output-dir checkpoints/nlg
-    python scripts/nlg/finetune.py --capability all --output-dir checkpoints/nlg
-    python scripts/nlg/finetune.py --capability coding --use-lora --hf-cache-dir $SCRATCH/huggingface
+    pip install datasets transformers trl peft
+    export HF_HOME=$SCRATCH/huggingface
+
+    # Single GPU (LoRA)
+    python scripts/nlg/finetune.py --capability math --use-lora --hf-cache-dir $SCRATCH/huggingface
+
+    # Multi-GPU full fine-tune with FSDP (recommended for 8B without LoRA)
+    torchrun --nproc_per_node=4 scripts/nlg/finetune.py --capability math --fsdp --hf-cache-dir $SCRATCH/huggingface
+
+    # All capabilities
+    torchrun --nproc_per_node=4 scripts/nlg/finetune.py --capability all --fsdp --hf-cache-dir $SCRATCH/huggingface
 """
 
 import argparse
@@ -28,27 +37,28 @@ MAX_SEQ_LEN = 4096
 # Capability -> list of source values in the 'source' column
 CAPABILITY_SOURCES = {
     "math": [
-        "allenai/tulu-3-personas-math",
+        "ai2-adapt-dev/personahub_math_v5_regen_149960",
         "allenai/tulu-3-sft-personas-math-grade",
-        "allenai/tulu-3-personas-algebra",
-        "AI-MO/NuminaMath-TIR",
+        "ai2-adapt-dev/tulu_v3.9_personahub_math_interm_algebra_20k",
+        "ai2-adapt-dev/numinamath_tir_math_decontaminated",
+        "ai2-adapt-dev/tulu_v3.9_open_math_2_gsm8k_50k",
     ],
     "coding": [
-        "allenai/tulu-3-sft-personas-code",
-        "theblackcat102/evol-codealpaca-v1",
+        "ai2-adapt-dev/personahub_code_v2_34999",
+        "ai2-adapt-dev/evol_codealpaca_heval_decontaminated",
     ],
     "general": [
-        "allenai/WildChat-1M",
+        "ai2-adapt-dev/tulu_v3.9_wildchat_100k",
         "ai2-adapt-dev/oasst1_converted",
-        "HuggingFaceH4/no_robots",
+        "ai2-adapt-dev/no_robots_converted",
     ],
     "knowledge": [
         "ai2-adapt-dev/flan_v2_converted",
-        "allenai/SciRIFF",
-        "LipengCS/Table-GPT",
+        "ai2-adapt-dev/tulu_v3.9_sciriff_10k",
+        "ai2-adapt-dev/tulu_v3.9_table_gpt_5k",
     ],
     "precise_if": [
-        "allenai/tulu-3-sft-personas-instruction-following",
+        "ai2-adapt-dev/personahub_ifdata_manual_seed_v3_29980",
     ],
 }
 
@@ -74,6 +84,11 @@ def parse_args():
     p.add_argument("--lora-alpha", type=int, default=16)
     p.add_argument("--hf-cache-dir", type=str, default=None)
     p.add_argument("--bf16", action="store_true", default=True)
+    p.add_argument(
+        "--fsdp",
+        action="store_true",
+        help="Enable FSDP full sharding (required for full fine-tune on multi-GPU)",
+    )
     return p.parse_args()
 
 
@@ -81,6 +96,11 @@ def train_capability(capability, args):
     print(f"\n{'='*60}")
     print(f"Training capability: {capability}")
     print(f"{'='*60}")
+
+    run_dir = os.path.join(args.output_dir, f"Llama-3.1-8B-{capability}")
+    if os.path.isdir(run_dir) and os.listdir(run_dir):
+        print(f"  Skipping {capability} — {run_dir} already exists")
+        return
 
     if args.hf_cache_dir:
         os.environ["HF_HOME"] = args.hf_cache_dir
@@ -96,6 +116,11 @@ def train_capability(capability, args):
     ds = ds.remove_columns([c for c in ds.column_names if c != "messages"])
     print(f"  {len(ds)} examples")
 
+    if len(ds) == 0:
+        print(f"  WARNING: No examples found for {capability}, skipping.")
+        print(f"  Expected sources: {sources}")
+        return
+
     # Load tokenizer from Instruct variant (has chat template), model from base
     tokenizer = AutoTokenizer.from_pretrained(
         "meta-llama/Meta-Llama-3.1-8B-Instruct", cache_dir=args.hf_cache_dir
@@ -110,7 +135,10 @@ def train_capability(capability, args):
         cache_dir=args.hf_cache_dir,
     )
 
-    run_dir = os.path.join(args.output_dir, f"Llama-3.1-8B-{capability}")
+    fsdp_kwargs = {}
+    if args.fsdp:
+        fsdp_kwargs["fsdp"] = "full_shard auto_wrap"
+        fsdp_kwargs["fsdp_config"] = {"auto_wrap_policy": "TRANSFORMER_BASED_WRAP"}
 
     sft_config = SFTConfig(
         output_dir=run_dir,
@@ -128,6 +156,7 @@ def train_capability(capability, args):
         report_to="none",
         gradient_checkpointing=True,
         gradient_checkpointing_kwargs={"use_reentrant": False},
+        **fsdp_kwargs,
     )
 
     peft_config = None
