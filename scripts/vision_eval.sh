@@ -45,7 +45,7 @@ BATCH_SIZE=32
 # Results are stored in the main results database.
 MODELS=(ViT-B-16 ViT-B-32 ViT-L-14)
 # METHODS=(eigcov isoc_mean knots_isoc_mean tsv knots_tsv regmean sum mean)
-METHODS=(wudi_00001)
+METHODS=(eigcov_fnorm)
 FT_MODES=(standard)
 RESULTS_DB="results/results.jsonl"
 COEFF_START=1.0

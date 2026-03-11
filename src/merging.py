@@ -307,7 +307,13 @@ def merge_eigcov(d: torch.Tensor, *args, **kwargs):
     return (d @ c).sum(dim=0) @ pinv(c.sum(dim=0))
 
 
-def merge_wudi(d: torch.Tensor, lam=0.0, *args, **kwargs):
+def merge_eigcov_fnorm(d: torch.Tensor, *args, **kwargs):
+    c = d.transpose(1, 2) @ d
+    c = c / (torch.linalg.norm(c, ord="fro", dim=(-2, -1), keepdim=True) ** 2)
+    return (d @ c).sum(dim=0) @ pinv(c.sum(dim=0))
+
+
+def merge_eigcov_lstsq(d: torch.Tensor, lam=0.0, *args, **kwargs):
     # d: (T, Do, Di)
     c = d.transpose(1, 2) @ d  # c: (T, Di, Di)
 
@@ -343,15 +349,33 @@ def merge_wudi(d: torch.Tensor, lam=0.0, *args, **kwargs):
     return W
 
 
-merge_wudi_00001 = lambda *args, **kwargs: merge_wudi(*args, lam=0.0001, **kwargs)
-merge_wudi_0001 = lambda *args, **kwargs: merge_wudi(*args, lam=0.001, **kwargs)
-merge_wudi_001 = lambda *args, **kwargs: merge_wudi(*args, lam=0.01, **kwargs)
-merge_wudi_005 = lambda *args, **kwargs: merge_wudi(*args, lam=0.05, **kwargs)
-merge_wudi_01 = lambda *args, **kwargs: merge_wudi(*args, lam=0.1, **kwargs)
-merge_wudi_02 = lambda *args, **kwargs: merge_wudi(*args, lam=0.2, **kwargs)
-merge_wudi_03 = lambda *args, **kwargs: merge_wudi(*args, lam=0.3, **kwargs)
-merge_wudi_04 = lambda *args, **kwargs: merge_wudi(*args, lam=0.4, **kwargs)
-merge_wudi_05 = lambda *args, **kwargs: merge_wudi(*args, lam=0.5, **kwargs)
+merge_eigcov_lstsq_00001 = lambda *args, **kwargs: merge_eigcov_lstsq(
+    *args, lam=0.0001, **kwargs
+)
+merge_eigcov_lstsq_0001 = lambda *args, **kwargs: merge_eigcov_lstsq(
+    *args, lam=0.001, **kwargs
+)
+merge_eigcov_lstsq_001 = lambda *args, **kwargs: merge_eigcov_lstsq(
+    *args, lam=0.01, **kwargs
+)
+merge_eigcov_lstsq_005 = lambda *args, **kwargs: merge_eigcov_lstsq(
+    *args, lam=0.05, **kwargs
+)
+merge_eigcov_lstsq_01 = lambda *args, **kwargs: merge_eigcov_lstsq(
+    *args, lam=0.1, **kwargs
+)
+merge_eigcov_lstsq_02 = lambda *args, **kwargs: merge_eigcov_lstsq(
+    *args, lam=0.2, **kwargs
+)
+merge_eigcov_lstsq_03 = lambda *args, **kwargs: merge_eigcov_lstsq(
+    *args, lam=0.3, **kwargs
+)
+merge_eigcov_lstsq_04 = lambda *args, **kwargs: merge_eigcov_lstsq(
+    *args, lam=0.4, **kwargs
+)
+merge_eigcov_lstsq_05 = lambda *args, **kwargs: merge_eigcov_lstsq(
+    *args, lam=0.5, **kwargs
+)
 
 # def merge_eigcov_lstsq(d: torch.Tensor, *args, **kwargs):
 #     # c = d.transpose(1, 2) @ d
@@ -367,7 +391,7 @@ merge_wudi_05 = lambda *args, **kwargs: merge_wudi(*args, lam=0.5, **kwargs)
 #     return (d @ c).sum(dim=0) @ pinv(cbar)
 
 
-def merge_eigcov_weighted(d: torch.Tensor, lam: float = 0.0, *args, **kwargs):
+def merge_eigcov_weighted_v1(d: torch.Tensor, lam: float = 0.0, *args, **kwargs):
     c = _get_eigcov(d)
     # Add regularization
     gam = 1 / torch.linalg.norm(d, ord="fro", dim=(-2, -1), keepdim=True) ** 2
