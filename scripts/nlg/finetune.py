@@ -64,9 +64,9 @@ def parse_args():
         choices=list(CAPABILITY_SOURCES.keys()) + ["all"],
     )
     p.add_argument("--output-dir", type=str, default="checkpoints/nlg")
-    p.add_argument("--num-epochs", type=int, default=2)
-    p.add_argument("--batch-size", type=int, default=1)
-    p.add_argument("--grad-accum", type=int, default=2)
+    p.add_argument("--num-epochs", type=int, default=1)
+    p.add_argument("--batch-size", type=int, default=2)
+    p.add_argument("--grad-accum", type=int, default=32)
     p.add_argument("--lr", type=float, default=5e-6)
     p.add_argument("--warmup-ratio", type=float, default=0.03)
     p.add_argument("--use-lora", action="store_true")
@@ -84,6 +84,9 @@ def train_capability(capability, args):
 
     if args.hf_cache_dir:
         os.environ["HF_HOME"] = args.hf_cache_dir
+
+    # Precise IF uses higher LR (1e-5) per paper
+    lr = 1e-5 if capability == "precise_if" else args.lr
 
     # Load and filter dataset
     sources = CAPABILITY_SOURCES[capability]
@@ -105,7 +108,6 @@ def train_capability(capability, args):
         PRETRAINED_MODEL,
         torch_dtype=torch.bfloat16 if args.bf16 else torch.float32,
         cache_dir=args.hf_cache_dir,
-        attn_implementation="flash_attention_2",
     )
 
     run_dir = os.path.join(args.output_dir, f"Llama-3.1-8B-{capability}")
@@ -116,7 +118,7 @@ def train_capability(capability, args):
         num_train_epochs=args.num_epochs,
         per_device_train_batch_size=args.batch_size,
         gradient_accumulation_steps=args.grad_accum,
-        learning_rate=args.lr,
+        learning_rate=lr,
         warmup_ratio=args.warmup_ratio,
         lr_scheduler_type="linear",
         bf16=args.bf16,
