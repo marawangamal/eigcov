@@ -96,9 +96,9 @@ def train_capability(capability, args):
     ds = ds.remove_columns([c for c in ds.column_names if c != "messages"])
     print(f"  {len(ds)} examples")
 
-    # Load tokenizer + model
+    # Load tokenizer from Instruct variant (has chat template), model from base
     tokenizer = AutoTokenizer.from_pretrained(
-        PRETRAINED_MODEL, cache_dir=args.hf_cache_dir
+        "meta-llama/Meta-Llama-3.1-8B-Instruct", cache_dir=args.hf_cache_dir
     )
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -114,7 +114,7 @@ def train_capability(capability, args):
 
     sft_config = SFTConfig(
         output_dir=run_dir,
-        max_seq_length=MAX_SEQ_LEN,
+        max_length=MAX_SEQ_LEN,
         num_train_epochs=args.num_epochs,
         per_device_train_batch_size=args.batch_size,
         gradient_accumulation_steps=args.grad_accum,
