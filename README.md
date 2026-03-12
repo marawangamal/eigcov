@@ -124,6 +124,17 @@ python scripts/language/eval_task_addition.py \
   --model=t5-base --finetuning-mode=standard --merge-func=eigcov --save=$SCRATCH/eigcov/checkpoints/language
 ```
 
+### Generate covariance matrices at multiple sample counts
+```sh
+python scripts/language/covariance.py \
+  --model=t5-large \
+  --cov-split=train \
+  --cov-num-batches=1,10,100,500,1000 \
+  --cov-batch-size=1 \
+  --cov-type=sm \
+  --cov-estimator=full 
+```
+
 ## Repository Structure
 
 ```

@@ -35,3 +35,5 @@ python scripts/vision/covariance.py \
     --cov-estimator="$COV_ESTIMATOR" \
     --openclip-cachedir="$SCRATCH/openclip" \
     --data-location="$SLURM_TMPDIR/datasets"
+
+# new
