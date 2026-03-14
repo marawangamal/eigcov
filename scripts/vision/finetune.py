@@ -386,6 +386,9 @@ def finetune(rank, args):
                 enc = ddp_model.module.image_encoder
                 if args.grad_cross_matrix:
                     enc = copy.deepcopy(enc).cpu()
+                    for m in enc.modules():
+                        m._forward_hooks.clear()
+                        m._backward_hooks.clear()
                     unswap_mha(enc)
                 enc.save(model_path)
                 print(f"Saved checkpoint to {model_path}", flush=True)
@@ -431,6 +434,9 @@ def finetune(rank, args):
         enc_to_save = image_encoder
         if args.grad_cross_matrix:
             enc_to_save = copy.deepcopy(image_encoder).cpu()
+            for m in enc_to_save.modules():
+                m._forward_hooks.clear()
+                m._backward_hooks.clear()
             unswap_mha(enc_to_save)
         enc_to_save.save(ft_path)
         cleanup_ddp()

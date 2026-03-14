@@ -182,22 +182,15 @@ scripts/                      # Entry points (run directly)
 
 ### 1. Fine-tune
 ```sh
+# Setup.
+module load cuda/12.6 arrow python/3.12 httpproxy
+export HF_HOME=$SCRATCH/huggingface
+source .venv/bin/activate
+
 # Multi-GPU full fine-tune with FSDP (required for 8B full fine-tune)
 torchrun --nproc_per_node=4 scripts/nlg/finetune.py \
-  --capability math --fsdp \
-  --output-dir $SCRATCH/eigcov/checkpoints/nlg \
-  --hf-cache-dir $SCRATCH/huggingface
-
-# All capabilities
-torchrun --nproc_per_node=4 scripts/nlg/finetune.py \
   --capability all --fsdp \
-  --output-dir $SCRATCH/eigcov/checkpoints/nlg \
-  --hf-cache-dir $SCRATCH/huggingface
-
-# Single GPU with LoRA (lower memory)
-python scripts/nlg/finetune.py \
-  --capability math --use-lora \
-  --hf-cache-dir $SCRATCH/huggingface
+  --output-dir $SCRATCH/eigcov/checkpoints/nlg
 ```
 
 ### Setup (olmes evaluation)
