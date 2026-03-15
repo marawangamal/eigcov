@@ -48,6 +48,7 @@ class GradCrossTermTracker:
         self.grad_sum = {name: None for name in self.layers}
         self.gram_sum = {name: None for name in self.layers}
         self.stilde_sum = {name: None for name in self.layers}
+        self.zzT_total = {name: None for name in self.layers}
         self.num_batches = 0
 
         # Hook storage
@@ -99,19 +100,31 @@ class GradCrossTermTracker:
                     self.grad_sum[name] = torch.zeros_like(g, device="cpu")
                     self.gram_sum[name] = torch.zeros(d_in, d_in, dtype=torch.float32)
                     self.stilde_sum[name] = torch.zeros(d_in, d_in, dtype=torch.float32)
+                    self.zzT_total[name] = torch.zeros(
+                        d_in, d_in, dtype=torch.float32
+                    )
                 self.grad_sum[name] += g.cpu() / batch_size
                 self.gram_sum[name] += (g.T @ g).cpu() / batch_size
 
                 # Accumulate z and gy statistics from hooks.
                 # Activations may be (T, B, d_in), (B, T, d_in), or (B, d_in);
                 # flatten everything except the feature dim.
-                z = self._activations[name].float().reshape(-1, self._activations[name].shape[-1])   # (N, d_in)
-                gy = self._output_grads[name].float().reshape(-1, self._output_grads[name].shape[-1])  # (N, d_out)
+                z = (
+                    self._activations[name]
+                    .float()
+                    .reshape(-1, self._activations[name].shape[-1])
+                )  # (N, d_in)
+                gy = (
+                    self._output_grads[name]
+                    .float()
+                    .reshape(-1, self._output_grads[name].shape[-1])
+                )  # (N, d_out)
                 if zzT_sum[name] is None:
                     d_in = z.shape[-1]
                     zzT_sum[name] = torch.zeros(d_in, d_in, dtype=torch.float32)
                 zzT_sum[name] += (z.cpu().T @ z.cpu()) / batch_size
                 gynorm_sum[name] += (gy.norm() ** 2).cpu().item() / batch_size
+                self.zzT_total[name] += (z.cpu().T @ z.cpu()) / batch_size
 
         # S_tilde_k = E[zz^T] * E[||gy||^2]
         for name in self.layers:
@@ -132,6 +145,7 @@ class GradCrossTermTracker:
             M = self.grad_sum[name]
             S = self.gram_sum[name]
             St = self.stilde_sum[name]
+            zzT = self.zzT_total[name]
             MtM = M.T @ M
 
             # cross-term error: cos_dist(M^T M, S)
@@ -149,6 +163,7 @@ class GradCrossTermTracker:
             print(f"    ||M^T M||_F       = {MtM.norm().item():.6e}")
             print(f"    ||S_bar||_F       = {S.norm().item():.6e}")
             print(f"    ||S_tilde||_F     = {St.norm().item():.6e}")
+            print(f"    ||zzT_total||_F   = {zzT.norm().item():.6e}")
             print(f"    cos_dist(cross)   = {cos_dist_cross.item():.6e}")
             print(f"    cos_dist(corr)    = {cos_dist_corr.item():.6e}")
             print(f"    ||S-St||/||S||    = {corr_diff_ratio.item():.6e}")
@@ -158,6 +173,7 @@ class GradCrossTermTracker:
                     "K": K,
                     "M": M,
                     "S_bar": S,
+                    "zzT_total": zzT,
                     "S_tilde": St,
                     "M_T_M": MtM,
                     "cos_dist_cross": cos_dist_cross.item(),

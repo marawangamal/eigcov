@@ -28,10 +28,10 @@ fi
 NUM_BATCHES=10
 BATCH_SIZE=32
 
-# # ===== Hyperparameter-optimized experiments =====
-# # Only evaluate TA (sum) since other methods do not require HP tuning.
-# # Results are written to a separate database to avoid mixing with the
-# # default runs.
+# ===== Hyperparameter-optimized experiments =====
+# Only evaluate TA (sum) since other methods do not require HP tuning.
+# Results are written to a separate database to avoid mixing with the
+# default runs.
 # MODELS=(ViT-B-16 ViT-B-32 ViT-L-14)
 # METHODS=(sum)
 # FT_MODES=(lora)
@@ -44,8 +44,8 @@ BATCH_SIZE=32
 # Evaluate all merging methods using their default settings.
 # Results are stored in the main results database.
 MODELS=(ViT-B-16 ViT-B-32 ViT-L-14)
-# METHODS=(eigcov isoc_mean knots_isoc_mean tsv knots_tsv regmean sum mean)
-METHODS=(knots_isoc_mean knots_tsv)
+METHODS=(tsv isoc_mean sum mean)
+# METHODS=(knots_isoc_mean knots_tsv)
 FT_MODES=(standard)
 RESULTS_DB="results/results.jsonl"
 COEFF_START=1.0
@@ -71,8 +71,7 @@ for MODEL in "${MODELS[@]}"; do
         --finetuning-mode="$FT_MODE" \
         --model="$MODEL" \
         --openclip-cachedir="$OPENCLIP_DIR" \
-        --data-location="$DATA_DIR" \
-        --results-db="$RESULTS_DB"
+        --data-location="$DATA_DIR" 
     fi
 
     # 1b. Evaluate single task (zeroshot)
@@ -85,8 +84,7 @@ for MODEL in "${MODELS[@]}"; do
         --finetuning-mode="none" \
         --model="$MODEL" \
         --openclip-cachedir="$OPENCLIP_DIR" \
-        --data-location="$DATA_DIR" \
-        --results-db="$RESULTS_DB"
+        --data-location="$DATA_DIR" 
     fi
 
     # 2. Evaluate task addition w/ diff merge methods
