@@ -85,6 +85,10 @@ def parse_args():
     p.add_argument("--hf-cache-dir", type=str, default=None)
     p.add_argument("--bf16", action="store_true", default=True)
     p.add_argument(
+        "--save-strategy", type=str, default="epoch", choices=["epoch", "steps", "no"]
+    )
+    p.add_argument("--save-steps", type=int, default=100)
+    p.add_argument(
         "--fsdp",
         action="store_true",
         help="Enable FSDP full sharding (required for full fine-tune on multi-GPU)",
@@ -151,7 +155,8 @@ def train_capability(capability, args):
         lr_scheduler_type="linear",
         bf16=args.bf16,
         logging_steps=10,
-        save_strategy="epoch",
+        save_strategy=args.save_strategy,
+        **({"save_steps": args.save_steps} if args.save_strategy == "steps" else {}),
         save_total_limit=2,
         report_to="none",
         gradient_checkpointing=True,
