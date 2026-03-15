@@ -96,8 +96,9 @@ python scripts/vision/finetune.py \
     --epochs 2 \
     --grad-cross-matrix \
     --data-location $SLURM_TMPDIR/datasets \
-    --save checkpoints-accum-e2-new \
-    --openclip-cachedir $SCRATCH/openclip
+    --save checkpoints-accum-e2-v2-2026-06-15 \
+    --openclip-cachedir $SCRATCH/openclip \
+    --max-steps 10
 ```
 
 ## Language Experiments
@@ -134,6 +135,39 @@ python scripts/language/covariance.py \
   --cov-type=sm \
   --cov-estimator=full 
 ```
+
+
+
+## NLG Experiments
+
+### 1. Fine-tune
+```sh
+# Setup.
+module load cuda/12.6 arrow python/3.12 httpproxy
+export HF_HOME=$SCRATCH/huggingface
+source .venv/bin/activate
+
+# Multi-GPU full fine-tune with FSDP (required for 8B full fine-tune)
+torchrun --nproc_per_node=4 scripts/nlg/finetune.py \
+  --capability precise_if --fsdp \
+  --output-dir $SCRATCH/eigcov/checkpoints/nlg
+
+torchrun --nproc_per_node=4 scripts/nlg/finetune.py \
+  --capability general --fsdp \
+  --output-dir $SCRATCH/eigcov/checkpoints/nlg \
+  --save-strategy steps
+
+```
+
+### Setup (olmes evaluation)
+```bash
+module load cuda/12.6 arrow python/3.12 httpproxy
+git clone https://github.com/allenai/olmes.git
+cd olmes
+uv sync
+uv sync --group gpu # for vLLM support
+```
+
 
 ## Repository Structure
 
@@ -175,35 +209,4 @@ scripts/                      # Entry points (run directly)
     ├── eval_single_task.py   # Evaluate single fine-tuned model
     ├── eval_task_addition.py
     └── eval_task_negation.py
-```
-
-
-## NLG Experiments
-
-### 1. Fine-tune
-```sh
-# Setup.
-module load cuda/12.6 arrow python/3.12 httpproxy
-export HF_HOME=$SCRATCH/huggingface
-source .venv/bin/activate
-
-# Multi-GPU full fine-tune with FSDP (required for 8B full fine-tune)
-torchrun --nproc_per_node=4 scripts/nlg/finetune.py \
-  --capability precise_if --fsdp \
-  --output-dir $SCRATCH/eigcov/checkpoints/nlg
-
-torchrun --nproc_per_node=4 scripts/nlg/finetune.py \
-  --capability general --fsdp \
-  --output-dir $SCRATCH/eigcov/checkpoints/nlg \
-  --save-strategy steps
-
-```
-
-### Setup (olmes evaluation)
-```bash
-module load cuda/12.6 arrow python/3.12 httpproxy
-git clone https://github.com/allenai/olmes.git
-cd olmes
-uv sync
-uv sync --group gpu # for vLLM support
 ```

@@ -259,6 +259,12 @@ def parse_arguments():
         ),
     )
     parser.add_argument(
+        "--max-steps",
+        type=int,
+        default=None,
+        help="Max number of optimizer steps for training. None means train for all epochs.",
+    )
+    parser.add_argument(
         "--grad-cross-matrix",
         action="store_true",
         default=False,
