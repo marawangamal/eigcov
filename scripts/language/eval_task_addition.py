@@ -105,6 +105,17 @@ for dataset in eval_datasets:
                 fisher_path=fisher_path,
             )
         )
+    elif args.finetuning_mode == "lora":
+        pretrained_checkpoint = f"{args.save}/{dataset}/zeroshot.pt"
+        finetuned_checkpoint = f"{args.save}/{dataset}/lora_finetuned.pt"
+        task_vectors.append(
+            LanguageNonLinearTaskVector(
+                pretrained_checkpoint,
+                finetuned_checkpoint,
+                covariance_path=cov_path,
+                fisher_path=fisher_path,
+            )
+        )
     else:
         pretrained_checkpoint = f"{args.save}/{dataset}/zeroshot.pt"
         finetuned_checkpoint = f"{args.save}/{dataset}/finetuned.pt"
