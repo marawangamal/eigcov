@@ -328,3 +328,55 @@ def merge_eigcov_general(
     except Exception as e:
         print(f"[fallback] solve failed ({e}), using mean")
         return d.mean(dim=0)
+
+
+def merge_eigcov_gd(
+    d: torch.Tensor,
+    lam=0.0,
+    alpha_weighted=False,
+    cov_weighted=False,
+    lr=1e-3,
+    max_iters=1000,
+    thresh=1e-6,
+    **kwargs,
+) -> torch.Tensor:
+    """Gradient-descent solver for the EigCov objective.
+
+    Minimizes the same weighted least-squares loss as merge_eigcov_general:
+        L(W) = Σ_t tr((W - d_t) C_t (W - d_t)^T) + λ ‖W‖_F²
+    where C_t = d_t^T @ d_t.
+    """
+    C = d.transpose(1, 2) @ d  # (T, Di, Di)
+
+    if cov_weighted:
+        C = C / (torch.linalg.norm(C, ord="fro", dim=(-2, -1), keepdim=True) ** 2)
+
+    if alpha_weighted:
+        alpha = 1.0 / d.flatten(1).norm(dim=1)  # (T,)
+        C = alpha[:, None, None] * C  # (T, Di, Di)
+
+    W = d.mean(dim=0).clone().requires_grad_(True)  # (Do, Di)
+    optimizer = torch.optim.Adam([W], lr=lr)
+
+    # Re-enable gradients inside the torch.no_grad() context of combine_task_vectors
+    with torch.enable_grad():
+        prev_loss = float("inf")
+        for i in range(int(max_iters)):
+            optimizer.zero_grad()
+            diff = W.unsqueeze(0) - d  # (T, Do, Di)
+            loss = (diff @ C).mul_(diff).sum()
+            if lam > 0:
+                loss = loss + lam * W.square().sum()
+            loss.backward()
+            optimizer.step()
+
+            cur_loss = loss.item()
+            if abs(prev_loss - cur_loss) / (abs(prev_loss) + 1e-12) < thresh:
+                print(f"[converged] loss={cur_loss:.1e} < {thresh:.1e}")
+                break
+            prev_loss = cur_loss
+
+    if i == int(max_iters) - 1:
+        print(f"[not converged] loss={cur_loss:.1e} after {max_iters} iters")
+
+    return W.detach()

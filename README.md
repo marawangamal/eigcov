@@ -150,7 +150,8 @@ source .venv/bin/activate
 # Multi-GPU full fine-tune with FSDP (required for 8B full fine-tune)
 torchrun --nproc_per_node=4 scripts/nlg/finetune.py \
   --capability math --fsdp \
-  --output-dir $SCRATCH/eigcov/checkpoints/nlg
+  --output-dir $SCRATCH/eigcov/checkpoints/nlg \
+  --save-strategy steps --save-steps 200
 
 torchrun --nproc_per_node=4 scripts/nlg/finetune.py \
   --capability general --fsdp \

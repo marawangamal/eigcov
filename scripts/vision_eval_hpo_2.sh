@@ -25,28 +25,25 @@ if [ ! -d "$DATA_DIR" ]; then
 fi
 
 # ── Configuration ────────────────────────────────────────────────────────
-MODEL=ViT-L-14
+MODEL=ViT-B-16
 METHOD=eigcov_gd
 FT_MODE=standard
-RESULTS_DB="results-v1/results-hpopt-v2.jsonl"
-SAVE="checkpoints-v1"
+RESULTS_DB="results/results.jsonl"
+SAVE="checkpoints"
 
 HPOS=(
-  # # # None.
-  # '{"alpha_weighted": [false]}'
-  # # Regularized experiments.
-  # # EigCov (default)
-  # '{"alpha_weighted": [false], "cov_weighted": [false], "lam": [0.00001, 0.0001, 0.001, 0.01]}'
-  # # EigCov (normalized covariance)
-  # '{"alpha_weighted": [false], "cov_weighted": [true], "lam": [0.01]}'
+  # EigCov (default)
+  '{"alpha_weighted": [false], "cov_weighted": [false], "lam": [0.00001, 0.0001, 0.001, 0.01]}'
+  # EigCov (normalized covariance)
+  '{"alpha_weighted": [false], "cov_weighted": [true], "lam": [0.01]}'
   # # EigCov (normalized objective)
   '{"alpha_weighted": [true], "cov_weighted": [false], "lam": [0.00001, 0.0001, 0.001, 0.01]}'
 
-  # # Unregularized experiments.
-  # # EigCov (default)
-  # '{"alpha_weighted": [false], "cov_weighted": [false]}'
-  # # EigCov (normalized covariance)
-  # '{"alpha_weighted": [false], "cov_weighted": [true]}'
+  # Unregularized experiments.
+  # EigCov (default)
+  '{"alpha_weighted": [false], "cov_weighted": [false]}'
+  # EigCov (normalized covariance)
+  '{"alpha_weighted": [false], "cov_weighted": [true]}'
   # EigCov (normalized objective)
   '{"alpha_weighted": [true], "cov_weighted": [false]}'
 )

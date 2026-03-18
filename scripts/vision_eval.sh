@@ -49,8 +49,8 @@ BATCH_SIZE=32
 # ===== Default experiments (no hyperparameter tuning) =====
 # Evaluate all merging methods using their default settings.
 # Results are stored in the main results database.
-MODELS=(ViT-B-16 ViT-B-32 ViT-L-14)
-METHODS=(tsv isoc eigcov regmean sum mean)
+MODELS=(ViT-B-16)
+METHODS=(tsv eigcov)
 # METHODS=(knots_isoc_mean knots_tsv)
 FT_MODES=(standard)
 RESULTS_DB="results/results.jsonl"
@@ -122,9 +122,9 @@ for MODEL in "${MODELS[@]}"; do
 
       # 2b. Set cov-dir (only meaningful for regmean/fisher)
       if [ "$method" = "fisher" ]; then
-        COV_DIR="results/$MODEL/fisher_strain_n${NUM_BATCHES}_b${BATCH_SIZE}_ft${FT_MODE}"
+        COV_DIR="checkpoints/$MODEL/_fishers/fisher_strain_n${NUM_BATCHES}_b${BATCH_SIZE}_ft${FT_MODE}"
       elif [ "$method" = "regmean" ]; then
-        COV_DIR="results/$MODEL/covariances_strain_n${NUM_BATCHES}_b${BATCH_SIZE}_tsm_attnsplit_efull_ft${FT_MODE}"
+        COV_DIR="checkpoints/$MODEL/_covariances/covariances_strain_n${NUM_BATCHES}_b${BATCH_SIZE}_tsm_attnsplit_efull_ft${FT_MODE}"
       else
         COV_DIR="None"
       fi
@@ -144,3 +144,11 @@ for MODEL in "${MODELS[@]}"; do
     done
   done
 done
+
+
+# python scripts/vision/eval_task_addition.py \
+# --model="ViT-B-16" \
+# --finetuning-mode="standard" \
+# --data-location="$SLURM_TMPDIR/datasets" \
+# --merge-func="eigcov" \
+# --mha=split 
