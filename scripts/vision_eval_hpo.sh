@@ -39,16 +39,16 @@ HPOS=(
   # '{"alpha_weighted": [false], "cov_weighted": [false], "lam": [0.00001, 0.0001, 0.001, 0.01]}'
   # # EigCov (normalized covariance)
   # '{"alpha_weighted": [false], "cov_weighted": [true], "lam": [0.01]}'
-  # # EigCov (normalized objective)
-  '{"alpha_weighted": [true], "cov_weighted": [false], "lam": [0.00001, 0.0001, 0.001, 0.01]}'
+  # # # EigCov (normalized objective)
+  # '{"alpha_weighted": [true], "cov_weighted": [false], "lam": [0.00001, 0.0001, 0.001, 0.01]}'
 
   # # Unregularized experiments.
   # # EigCov (default)
   # '{"alpha_weighted": [false], "cov_weighted": [false]}'
   # # EigCov (normalized covariance)
   # '{"alpha_weighted": [false], "cov_weighted": [true]}'
-  # # EigCov (normalized objective)
-  # '{"alpha_weighted": [true], "cov_weighted": [false]}'
+  # EigCov (normalized objective)
+  '{"alpha_weighted": [true], "cov_weighted": [false]}'
 )
 # ─────────────────────────────────────────────────────────────────────────
 
