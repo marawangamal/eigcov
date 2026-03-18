@@ -49,11 +49,10 @@ BATCH_SIZE=32
 # ===== Default experiments (no hyperparameter tuning) =====
 # Evaluate all merging methods using their default settings.
 # Results are stored in the main results database.
-MODELS=(ViT-B-16 ViT-B-32 ViT-L-14)
-METHODS=(tsv isoc eigcov regmean sum mean)
-# METHODS=(knots_isoc_mean knots_tsv)
+MODELS=(ViT-B-16)
+METHODS=(tsv eigcov)
 FT_MODES=(standard)
-RESULTS_DB="results/results.jsonl"
+RESULTS_DB="results/results-new-tmp.jsonl"
 HPO=""
 
 
@@ -102,7 +101,6 @@ for MODEL in "${MODELS[@]}"; do
           --cov-split=train \
           --cov-num-batches="$NUM_BATCHES" \
           --cov-batch-size="$BATCH_SIZE" \
-          --mha=split \
           --cov-type=sm \
           --cov-estimator=full \
           --finetuning-mode="$FT_MODE" \
@@ -136,7 +134,6 @@ for MODEL in "${MODELS[@]}"; do
         --finetuning-mode="$FT_MODE" \
         --data-location="$DATA_DIR" \
         --merge-func="$method" \
-        --mha=split \
         --cov-dir="$COV_DIR" \
         --results-db="$RESULTS_DB" \
         ${HPO:+--hpo="$HPO"}

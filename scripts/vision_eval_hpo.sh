@@ -25,20 +25,21 @@ if [ ! -d "$DATA_DIR" ]; then
 fi
 
 # ── Configuration ────────────────────────────────────────────────────────
-MODEL=ViT-L-14
+MODEL=ViT-B-32
 METHOD=eigcov_general
 FT_MODE=standard
-RESULTS_DB="results/results-hpopt-v2.jsonl"
+RESULTS_DB="results-v1/results-hpopt-v2.jsonl"
+SAVE="checkpoints-v1"
 
 HPOS=(
-  # # None.
-  '{"alpha_weighted": [false]}'
-  # Regularized experiments.
-  # EigCov (default)
-  '{"alpha_weighted": [false], "cov_weighted": [false], "lam": [0.00001, 0.0001, 0.001, 0.01]}'
-  # EigCov (normalized covariance)
-  '{"alpha_weighted": [false], "cov_weighted": [true], "lam": [0.01]}'
-  # EigCov (normalized objective)
+  # # # None.
+  # '{"alpha_weighted": [false]}'
+  # # Regularized experiments.
+  # # EigCov (default)
+  # '{"alpha_weighted": [false], "cov_weighted": [false], "lam": [0.00001, 0.0001, 0.001, 0.01]}'
+  # # EigCov (normalized covariance)
+  # '{"alpha_weighted": [false], "cov_weighted": [true], "lam": [0.01]}'
+  # # EigCov (normalized objective)
   '{"alpha_weighted": [true], "cov_weighted": [false], "lam": [0.00001, 0.0001, 0.001, 0.01]}'
 
   # # Unregularized experiments.
@@ -53,10 +54,10 @@ HPOS=(
 
 # 1a. Evaluate single task (finetuned)
 case "$FT_MODE" in
-  lora)    _ST_FT="checkpoints/$MODEL/lora_ft_accuracies.json" ;;
-  linear)  _ST_FT="checkpoints/$MODEL/linear_ft_accuracies.json" ;;
-  posthoc) _ST_FT="checkpoints/$MODEL/posthoc_ft_accuracies.json" ;;
-  *)       _ST_FT="checkpoints/$MODEL/ft_accuracies.json" ;;
+  lora)    _ST_FT="$SAVE/$MODEL/lora_ft_accuracies.json" ;;
+  linear)  _ST_FT="$SAVE/$MODEL/linear_ft_accuracies.json" ;;
+  posthoc) _ST_FT="$SAVE/$MODEL/posthoc_ft_accuracies.json" ;;
+  *)       _ST_FT="$SAVE/$MODEL/ft_accuracies.json" ;;
 esac
 if [ -f "$_ST_FT" ]; then
   echo "[BASH] Skipping eval_single_task.py | $_ST_FT already exists"
@@ -66,11 +67,12 @@ else
     --finetuning-mode="$FT_MODE" \
     --model="$MODEL" \
     --openclip-cachedir="$OPENCLIP_DIR" \
-    --data-location="$DATA_DIR"
+    --data-location="$DATA_DIR" \ 
+    --save="$SAVE"
 fi
 
 # 1b. Evaluate single task (zeroshot)
-_ST_ZS="checkpoints/$MODEL/zeroshot_accuracies.json"
+_ST_ZS="$SAVE/$MODEL/zeroshot_accuracies.json"
 if [ -f "$_ST_ZS" ]; then
   echo "[BASH] Skipping eval_single_task.py (zeroshot) | $_ST_ZS already exists"
 else
@@ -79,7 +81,8 @@ else
     --finetuning-mode="none" \
     --model="$MODEL" \
     --openclip-cachedir="$OPENCLIP_DIR" \
-    --data-location="$DATA_DIR"
+    --data-location="$DATA_DIR" \
+    --save="$SAVE"
 fi
 
 # 2. Loop over HPO configs
@@ -91,5 +94,6 @@ for HPO in "${HPOS[@]}"; do
     --data-location="$DATA_DIR" \
     --merge-func="$METHOD" \
     --results-db="$RESULTS_DB" \
-    --hpo="$HPO"
+    --hpo="$HPO" \
+    --save="$SAVE"
 done

@@ -19,10 +19,11 @@ export SSL_CERT_DIR=/etc/ssl/certs
 HF_CACHE_DIR="$SCRATCH/hf_cache"
 
 # ── Configuration ────────────────────────────────────────────────────────
-MODEL=t5-large
+MODEL=t5-base
 METHOD=eigcov_general
 FT_MODE=standard
-RESULTS_DB="results/results-hpopt-v2.jsonl"
+RESULTS_DB="results-v1/results-hpopt-v2.jsonl"
+SAVE="checkpoints-v1"
 
 HPOS=(
   # # # None.
@@ -47,9 +48,9 @@ HPOS=(
 
 # 1a. Evaluate single task (finetuned)
 case "$FT_MODE" in
-  standard) _ST_FT="checkpoints/$MODEL/ft_accuracies.json" ;;
-  linear)   _ST_FT="checkpoints/$MODEL/linear_ft_accuracies.json" ;;
-  lora)     _ST_FT="checkpoints/$MODEL/lora_ft_accuracies.json" ;;
+  standard) _ST_FT="$SAVE/$MODEL/ft_accuracies.json" ;;
+  linear)   _ST_FT="$SAVE/$MODEL/linear_ft_accuracies.json" ;;
+  lora)     _ST_FT="$SAVE/$MODEL/lora_ft_accuracies.json" ;;
   *)        echo "Unknown finetuning mode: $FT_MODE"; exit 1 ;;
 esac
 if [ -f "$_ST_FT" ]; then
@@ -60,11 +61,12 @@ else
     --finetuning-mode="$FT_MODE" \
     --hf-cache-dir="$HF_CACHE_DIR" \
     --model="$MODEL" \
-    --results-db="$RESULTS_DB"
+    --results-db="$RESULTS_DB" \
+    --save="$SAVE"
 fi
 
 # 1b. Evaluate single task (zeroshot)
-_ST_ZS="checkpoints/$MODEL/zeroshot_accuracies.json"
+_ST_ZS="$SAVE/$MODEL/zeroshot_accuracies.json"
 if [ -f "$_ST_ZS" ]; then
   echo "[BASH] Skipping eval_single_task.py (zeroshot) | $_ST_ZS already exists"
 else
@@ -73,7 +75,8 @@ else
     --finetuning-mode="none" \
     --hf-cache-dir="$HF_CACHE_DIR" \
     --model="$MODEL" \
-    --results-db="$RESULTS_DB"
+    --results-db="$RESULTS_DB" \
+    --save="$SAVE"
 fi
 
 # 2. Loop over HPO configs
@@ -86,7 +89,8 @@ for HPO in "${HPOS[@]}"; do
     --cov-dir="None" \
     --results-db="$RESULTS_DB" \
     --hf-cache-dir="$HF_CACHE_DIR" \
-    --hpo="$HPO"
+    --hpo="$HPO" \
+    --save="$SAVE"
 done
 
 
