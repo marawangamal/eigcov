@@ -69,18 +69,23 @@ for model_id in [PRETRAINED_MODEL] + MODELS:
     )
 
 
-rows = []
+import pandas as pd
+
+RESULTS_DIR = os.path.join("results", "task_vector_norms")
+os.makedirs(RESULTS_DIR, exist_ok=True)
+
 for tv_dict in tqdm(tv_dicts, total=len(tv_dicts)):
     model_id = tv_dict["model_id"]
     task_vector = tv_dict["task_vector"]
-    # task_vector.lazy_keys()
+    out_path = os.path.join(RESULTS_DIR, f"{model_id.replace('/', '-')}.csv")
+    if os.path.exists(out_path):
+        print(f"Skipping {model_id} (already exists)")
+        continue
+    keys = task_vector.lazy_keys()
+    rows = []
     print(f"Fetching keys for {model_id}...")
-    for i, k in tqdm(
-        enumerate(task_vector.lazy_keys()), total=len(task_vector.vector), leave=False
-    ):
-        print(f"[{i}/{len(task_vector.vector)}] {k}")
+    for i, k in tqdm(enumerate(keys), total=len(keys), leave=False):
         tens = task_vector.get_vector_element(k)
-        print(f"[{i}/{len(task_vector.vector)}] {k} {tens.shape}")
         if tens.ndim != 2:
             continue
         rows.append(
@@ -90,10 +95,6 @@ for tv_dict in tqdm(tv_dicts, total=len(tv_dicts)):
                 "norm": torch.linalg.norm(tens.float(), ord=2),
             }
         )
-        # print(f"[{i}/{len(task_vector.vector)}] {k} {tens.shape}")
-
-
-import pandas as pd
-
-df = pd.DataFrame(rows)
-df.to_csv(os.path.join("results", "task_vector_norms.csv"), index=False)
+    df = pd.DataFrame(rows)
+    df.to_csv(out_path, index=False)
+    print(f"Saved {out_path}")

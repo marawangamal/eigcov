@@ -21,7 +21,7 @@ RESULTS_DB="results/results-latency.jsonl"
 SAVE="checkpoints"
 
 # ── Models / finetuning modes ───────────────────────────────────────────
-MODELS=(t5-base)
+MODELS=(t5-large)
 FT_MODES=(standard)
 
 # ── Default methods (from lang_eval.sh) ─────────────────────────────────

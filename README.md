@@ -158,6 +158,12 @@ torchrun --nproc_per_node=4 scripts/nlg/finetune.py \
   --output-dir $SCRATCH/eigcov/checkpoints/nlg \
   --save-strategy steps
 
+hf upload mremila/Llama-3.1-8B-math checkpoints/nlg/Llama-3.1-8B-math --repo-type model                                            
+hf upload mremila/Llama-3.1-8B-coding checkpoints/nlg/Llama-3.1-8B-coding --repo-type model                                        
+hf upload mremila/Llama-3.1-8B-general checkpoints/nlg/Llama-3.1-8B-general --repo-type model                                      
+hf upload mremila/Llama-3.1-8B-knowledge checkpoints/nlg/Llama-3.1-8B-knowledge --repo-type model                                  
+hf upload mremila/Llama-3.1-8B-precise_if checkpoints/nlg/Llama-3.1-8B-precise_if --repo-type model    
+
 ```
 
 ### Setup (olmes evaluation)
