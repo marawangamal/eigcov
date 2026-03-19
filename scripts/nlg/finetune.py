@@ -93,6 +93,11 @@ def parse_args():
         action="store_true",
         help="Enable FSDP full sharding (required for full fine-tune on multi-GPU)",
     )
+    p.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume training from latest checkpoint in output dir",
+    )
     return p.parse_args()
 
 
@@ -102,7 +107,7 @@ def train_capability(capability, args):
     print(f"{'='*60}")
 
     run_dir = os.path.join(args.output_dir, f"Llama-3.1-8B-{capability}")
-    if os.path.isdir(run_dir) and os.listdir(run_dir):
+    if os.path.isdir(run_dir) and os.listdir(run_dir) and not args.resume:
         print(f"  Skipping {capability} — {run_dir} already exists")
         return
 
@@ -190,7 +195,7 @@ def train_capability(capability, args):
         peft_config=peft_config,
     )
 
-    trainer.train()
+    trainer.train(resume_from_checkpoint=args.resume)
 
     print(f"Saving to {run_dir} ...")
     trainer.save_model(run_dir)

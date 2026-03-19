@@ -8,8 +8,8 @@
 #SBATCH --output=logs/%x_%j.out
 #SBATCH --error=logs/%x_%j.err
 
-set -euo pipefail
-mkdir -p logs
+# set -euo pipefail
+# mkdir -p logs
 
 # 0. Setup environment
 source "$SCRATCH/eigcov/.venv/bin/activate"
@@ -19,30 +19,28 @@ export SSL_CERT_DIR=/etc/ssl/certs
 HF_CACHE_DIR="$SCRATCH/hf_cache"
 
 # ── Configuration ────────────────────────────────────────────────────────
-MODELS=(t5-base)
+MODELS=(t5-large)
 METHODS=(eigcov_general)
 FT_MODES=(standard)
 RESULTS_DB="results/results.jsonl"
 SAVE="checkpoints"
 
 HPOS=(
-  # # # None.
-  # '{"alpha_weighted": [false]}'
-  # # Regularized experiments.
-  # # EigCov (default)
-  # '{"alpha_weighted": [false], "cov_weighted": [false], "lam": [0.01]}'
-  # # EigCov (normalized covariance)
-  # '{"alpha_weighted": [false], "cov_weighted": [true], "lam": [0.01]}'
-  # # EigCov (normalized objective)
-  # '{"alpha_weighted": [true], "cov_weighted": [false], "lam": [0.01], "solver": ["lstsq"]}'
-
-  # # Unregularized experiments.
-  # # EigCov (default)
-  # '{"alpha_weighted": [false], "cov_weighted": [false]}'
-  # # EigCov (normalized covariance)
-  # '{"alpha_weighted": [false], "cov_weighted": [true]}'
+  # Regularized experiments.
+  # EigCov (default)
+  '{"alpha_weighted": [false], "cov_weighted": [false], "lam": [0.00001, 0.0001, 0.001, 0.01], "solver": ["solve"]}'
+  # EigCov (normalized covariance)
+  '{"alpha_weighted": [false], "cov_weighted": [true], "lam": [0.00001, 0.0001, 0.001, 0.01], "solver": ["solve"]}'
   # EigCov (normalized objective)
-  '{"alpha_weighted": [true], "cov_weighted": [false]}'
+  '{"alpha_weighted": [true], "cov_weighted": [false], "lam": [0.00001, 0.0001, 0.001, 0.01], "solver": ["solve"]}'
+
+  # Unregularized experiments.
+  # EigCov (default)
+  '{"alpha_weighted": [false], "cov_weighted": [false], "solver": ["solve"]}'
+  # EigCov (normalized covariance)
+  '{"alpha_weighted": [false], "cov_weighted": [true], "solver": ["solve"]}'
+  # EigCov (normalized objective)
+  '{"alpha_weighted": [true], "cov_weighted": [false], "solver": ["solve"]}'
 )
 # ─────────────────────────────────────────────────────────────────────────
 

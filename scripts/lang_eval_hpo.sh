@@ -19,7 +19,7 @@ export SSL_CERT_DIR=/etc/ssl/certs
 HF_CACHE_DIR="$SCRATCH/hf_cache"
 
 # ── Configuration ────────────────────────────────────────────────────────
-MODELS=(t5-base)
+MODELS=(t5-large)
 METHODS=(eigcov_gd)
 FT_MODES=(standard)
 RESULTS_DB="results/results.jsonl"

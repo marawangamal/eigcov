@@ -133,11 +133,11 @@ if __name__ == "__main__":
     ss_split = args.cov_split
     ss_estimator = args.cov_estimator
     ss_fm = args.finetuning_mode
-    cov_dir = f"{args.save}/{args.model}/_covariances/covariances_s{ss_split}_n{ss_num_batches}_b{ss_batch_size}_t{ss_type}_e{ss_estimator}_ft{ss_fm}"
+    cov_dir = f"{args.save}/_covariances/covariances_s{ss_split}_n{ss_num_batches}_b{ss_batch_size}_t{ss_type}_e{ss_estimator}_ft{ss_fm}"
     os.makedirs(cov_dir, exist_ok=True)
 
     def make_cov_dir(n):
-        return f"{args.save}/{args.model}/_covariances/covariances_s{ss_split}_n{n}_b{ss_batch_size}_t{ss_type}_e{ss_estimator}_ft{ss_fm}"
+        return f"{args.save}/_covariances/covariances_s{ss_split}_n{n}_b{ss_batch_size}_t{ss_type}_e{ss_estimator}_ft{ss_fm}"
 
     # Set cov_num_batches to the max for compute_covs
     args.cov_num_batches = ss_num_batches

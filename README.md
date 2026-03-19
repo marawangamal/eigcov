@@ -151,7 +151,7 @@ source .venv/bin/activate
 torchrun --nproc_per_node=4 scripts/nlg/finetune.py \
   --capability math --fsdp \
   --output-dir $SCRATCH/eigcov/checkpoints/nlg \
-  --save-strategy steps --save-steps 200
+  --save-strategy steps --save-steps 200 --resume
 
 torchrun --nproc_per_node=4 scripts/nlg/finetune.py \
   --capability general --fsdp \

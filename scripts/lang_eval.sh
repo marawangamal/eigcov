@@ -36,7 +36,7 @@ BATCH_SIZE=32
 # Evaluate all merging methods using their default settings.
 # Results are stored in the main results database.
 MODELS=(t5-base)
-METHODS=(regmean)
+METHODS=(isoc mean sum)
 FT_MODES=(standard)
 RESULTS_DB="results/results.jsonl"
 HPO=""
