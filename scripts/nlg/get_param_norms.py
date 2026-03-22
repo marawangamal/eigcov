@@ -112,11 +112,26 @@ def main() -> None:
 
         taus = torch.stack(deltas)  # (N, Do, Di)
         c = taus.transpose(1, 2) @ taus
-        coeff = c @ torch.linalg.pinv(c.sum(dim=0))  # (N, Di, Di)
-        norms = torch.linalg.norm(coeff, ord="fro", dim=(-2, -1))
+        coeffs = c @ torch.linalg.pinv(c.sum(dim=0))  # (N, Di, Di)
+        norms_taus = torch.linalg.norm(taus, ord="fro", dim=(-2, -1))
+        norms_cs = torch.linalg.norm(c, ord="fro", dim=(-2, -1))
+        norms_c_sum = torch.linalg.norm(c.sum(dim=0), ord="fro")
+        norms_inv_c_sum = torch.linalg.norm(torch.linalg.pinv(c.sum(dim=0)), ord="fro")
+        norms_coeffs = torch.linalg.norm(coeffs, ord="fro", dim=(-2, -1))
 
         for i, mid in enumerate(model_ids):
-            rows.append({"model_id": mid, "norm": norms[i].item()})
+            rows.append(
+                {
+                    "model_id": mid,
+                    "norm_taus": norms_taus[i].item(),
+                    "norm_coeffs": norms_coeffs[i].item(),
+                    "norm_cs": norms_cs[i].item(),
+                    "norm_c_sum": norms_c_sum.item(),
+                    "norm_inv_c_sum": norms_inv_c_sum.item(),
+                    "layer_idx": num_layers,
+                    "param_name": key,
+                }
+            )
 
         num_layers += 1
         if num_layers >= args.max_layers:

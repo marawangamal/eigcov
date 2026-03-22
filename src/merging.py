@@ -45,13 +45,11 @@ def combine_task_vectors(
 
     with torch.no_grad():
         new_vector = {}
-        for key in tqdm(
-            casted[0].vector,
-            desc="Merging task vectors",
-            total=len(casted[0].vector),
-            leave=False,
-        ):
-            if any(key not in v.vector for v in casted):
+        keys = casted[0].lazy_keys()
+        all_key_sets = [set(v.lazy_keys()) for v in casted]
+
+        for key in tqdm(keys, desc="Merging task vectors", leave=False):
+            if any(key not in ks for ks in all_key_sets):
                 # Skip keys that are not present in all vectors
                 continue
             # Stack on the merge device
@@ -282,15 +280,17 @@ def merge_eigcov_general(
     # print(f"lam: {lam}, alpha_weighted: {alpha_weighted}, cov_weighted: {cov_weighted}")
 
     T, Do, Di = d.shape
-    c = d.transpose(1, 2) @ d  # (T, Di, Di)
 
     if cov_weighted:
-        c = c / (torch.linalg.norm(c, ord="fro", dim=(-2, -1), keepdim=True) ** 2)
+        _c = d.transpose(1, 2) @ d  # (T, Di, Di)
+        # c = c / (torch.linalg.norm(c, ord="fro", dim=(-2, -1), keepdim=True) ** 2)
+        d = d / (torch.linalg.norm(_c, ord="fro", dim=(-2, -1), keepdim=True))
 
     # Factor each C_t = L_t L_t^T
-    e, v = torch.linalg.eigh(c)  # e: (T, Di), v: (T, Di, Di)
-    e = e.clamp(min=1e-8)
-    L = v * e.sqrt().unsqueeze(-2)  # (T, Di, Di)
+    # e, v = torch.linalg.eigh(c)  # e: (T, Di), v: (T, Di, Di)
+    # e = e.clamp(min=1e-8)
+    # L = v * e.sqrt().unsqueeze(-2)  # (T, Di, Di)
+    L = d
     Lt = L.transpose(-2, -1)  # (T, Di, Di)
 
     # Scale by sqrt(alpha_t)
@@ -306,15 +306,6 @@ def merge_eigcov_general(
     if lam > 0:
         A = torch.cat([A, lam**0.5 * torch.eye(Di, Di, device=A.device)], dim=0)
         B = torch.cat([B, torch.zeros(Di, Do, device=B.device)], dim=0)
-
-    # Condition-number guard: skip expensive solve for ill-conditioned A
-    # s = torch.linalg.svdvals(A)
-    # cond = s[0] / s[-1].clamp(min=1e-12)
-    # if cond > max_cond:
-    #     print(
-    #         f"[fallback] cond={cond:.1e} > {max_cond:.1e} for shape {d.shape}, using mean"
-    #     )
-    #     return d.mean(dim=0)
 
     print(f"d.shape: {d.shape}, A.shape: {A.shape}, B.shape: {B.shape}")
     # Solve A @ X = B where X = W^T

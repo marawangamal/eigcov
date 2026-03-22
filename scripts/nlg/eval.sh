@@ -24,3 +24,5 @@ done
 
 export HF_HOME="$SCRATCH/huggingface"
 olmes   --model r-three/Llama-3.1-8B-merged-eigcov  --task gsm8k::tulu drop::llama3 minerva_math::tulu codex_humaneval::tulu codex_humanevalplus::tulu ifeval::tulu popqa::tulu "bbh:cot-v1::tulu"   --output-dir results-nlg  --gpus 4
+
+

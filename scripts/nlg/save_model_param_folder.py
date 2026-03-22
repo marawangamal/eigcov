@@ -48,7 +48,6 @@ def main():
     parser.add_argument(
         "--output-dir", required=True, help="Output param_folder directory"
     )
-    parser.add_argument("--trust-remote-code", action="store_true")
     parser.add_argument(
         "--dtype",
         default="auto",
@@ -61,18 +60,14 @@ def main():
     params_dir = output_dir / "params"
     params_dir.mkdir(parents=True, exist_ok=True)
 
-    config = AutoConfig.from_pretrained(
-        args.model, trust_remote_code=args.trust_remote_code
-    )
+    config = AutoConfig.from_pretrained(args.model, trust_remote_code=True)
     config.save_pretrained(str(output_dir))
-    tokenizer = AutoTokenizer.from_pretrained(
-        args.model, trust_remote_code=args.trust_remote_code
-    )
+    tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
     tokenizer.save_pretrained(str(output_dir))
 
     model = AutoModelForCausalLM.from_pretrained(
         args.model,
-        trust_remote_code=args.trust_remote_code,
+        trust_remote_code=True,
         torch_dtype=_parse_dtype(args.dtype),
         device_map="cpu",
     )

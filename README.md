@@ -157,22 +157,66 @@ torchrun --nproc_per_node=4 scripts/nlg/finetune.py \
   --capability general --fsdp \
   --output-dir $SCRATCH/eigcov/checkpoints/nlg \
   --save-strategy steps
+  ```
 
+### 2. Merge
+```sh
+method=mean
+python scripts/nlg/merge.py \
+  --pretrained-dir checkpoints/nlg/meta-llama-Meta-Llama-3.1-8B \
+  --finetuned-dirs \
+    checkpoints/nlg/pmahdavi-Llama-3.1-8B-math-reasoning \
+    checkpoints/nlg/pmahdavi-Llama-3.1-8B-coding \
+    checkpoints/nlg/pmahdavi-Llama-3.1-8B-precise-if \
+    checkpoints/nlg/pmahdavi-Llama-3.1-8B-general \
+    checkpoints/nlg/pmahdavi-Llama-3.1-8B-knowledge-recall \
+  --merge-func $method \
+  --output-dir checkpoints/nlg/pmahdavi-Llama-3.1-8B-$method
+```
+
+### 3. Upload 
+```bash
+# 
 hf upload mremila/Llama-3.1-8B-math checkpoints/nlg/Llama-3.1-8B-math --repo-type model                                            
 hf upload mremila/Llama-3.1-8B-coding checkpoints/nlg/Llama-3.1-8B-coding --repo-type model                                        
 hf upload mremila/Llama-3.1-8B-general checkpoints/nlg/Llama-3.1-8B-general --repo-type model                                      
 hf upload mremila/Llama-3.1-8B-knowledge checkpoints/nlg/Llama-3.1-8B-knowledge --repo-type model                                  
 hf upload mremila/Llama-3.1-8B-precise_if checkpoints/nlg/Llama-3.1-8B-precise_if --repo-type model    
 
+# Merged models
+hf upload mremila/pmahdavi-Llama-3.1-8B-eigcov checkpoints/nlg/pmahdavi-Llama-3.1-8B-eigcov--repo-type model  
+hf upload mremila/pmahdavi-Llama-3.1-8B-tsv    checkpoints/nlg/pmahdavi-Llama-3.1-8B-tsv --repo-type model    
+hf upload mremila/pmahdavi-Llama-3.1-8B-mean    checkpoints/nlg/pmahdavi-Llama-3.1-8B-mean --repo-type model    
 ```
 
-### Setup (olmes evaluation)
+### 4. Evaluate 
 ```bash
-module load cuda/12.6 arrow python/3.12 httpproxy
-git clone https://github.com/allenai/olmes.git
-cd olmes
-uv sync
-uv sync --group gpu # for vLLM support
+
+## Setup (olmes evaluation)
+# module load cuda/12.6 arrow python/3.12 httpproxy
+# git clone https://github.com/allenai/olmes.git
+# cd olmes
+# uv sync
+# uv sync --group gpu # for vLLM support
+
+## Run Evaluation
+method=eigcov
+olmes --model mremila/pmahdavi-Llama-3.1-8B-$method \
+--task  codex_humaneval::tulu codex_humanevalplus::tulu \
+gsm8k::tulu drop::llama3 minerva_math::tulu  \
+ifeval::tulu popqa::tulu "bbh:cot-v1::tulu" \
+--output-dir results-nlg-4096-$method \
+--gpus 1 \
+--model-type vllm \
+--model-args '{"gpu_memory_utilization": 0.8, "trust_remote_code": false, "max_length": 4096}' 
+
+
+
+# code only
+olmes \
+  --model checkpoints/nlg/pmahdavi-Llama-3.1-8B-eigcov \
+  --task codex_humaneval::tulu codex_humanevalplus::tulu \
+  --output-dir results-nlg 
 ```
 
 
@@ -217,3 +261,26 @@ scripts/                      # Entry points (run directly)
     ├── eval_task_addition.py
     └── eval_task_negation.py
 ```
+
+In this section we discuss the theoretical guarantees of the layer-wise objective in~\ref{eq:interference}. Despite  ignoring cross-layer interactions and nonlinearities, \citet{sun2025lot} showed that the absolute \emph{negative transfer}, is upper bounded by the layer-wise interference.
+More formally, let $\ell:\R^D\to\R$ denote a loss function applied to the output of network $f$. The negative transfer on task $t$ for input $\vx$ is defined as
+\begin{equation}
+    \label{eq:negative-transfer}
+    \Delta\ell_t(\vx) = 
+    \ell \left( f\left(\vx;\, \vtheta_0 + \vtau\right) \right) - 
+    \ell \left( f\left(\vx;\, \vtheta_t\right) \right),
+\end{equation}
+where $\vtheta_0 + \vtau$ denotes the merged model. 
+In this section we show that the absolute negative transfer \emph{negative transfer} is also upper bounded by the EigenCov covariance estimation error.
+Suppose neural network $f$ decomposes layer-wise as $f = g^{(L)} \circ \cdots \circ g^{(1)}$, where $g^{(l)}(\vz;\,\vtheta^{(l)})$ is the function computed by layer $l$ on input $\vz$. Denoting the composed output at layer $l$ by $f^{(l)}$, we have that
+\[
+f^{(0)}(\vx;\,\vtheta) = \vx, \qquad
+f^{(l)}(\vx;\,\vtheta) = g^{(l)}\!\Big(f^{(l-1)}(\vx;\,\vtheta);\;\vtheta^{(l)}\Big).
+\]
+Define the local error at layer $l$ as
+\[
+\Delta g^{(l)}_t(\vz) = 
+g^{(l)}\Big(\vz;\;\vtheta_0^{(l)} + \vtau^{(l)}\Big) -
+g^{(l)}\Big(\vz;\;\vtheta_t^{(l)}\Big).
+\]
+Intuitively, $\Delta g^{(l)}_t$ is the change in the output of layer $l$ when only that layer's parameters are merged. The following theorem formally states that the absolute negative transfer in~\eqref{eq:negative-transfer} can be upper bounded by weighted summations of local errors and covariance estimates at each layer.
