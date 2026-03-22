@@ -161,6 +161,12 @@ torchrun --nproc_per_node=4 scripts/nlg/finetune.py \
 
 ### 2. Merge
 ```sh
+# Create param folders
+python scripts/nlg/save_model_param_folder.py --model pmahdavi/Llama-3.1-8B-coding --output-dir checkpoints/nlg/pmahdavi-Llama-3.1-8B-coding
+# ... do for all
+
+
+# Merge param folder
 method=mean
 python scripts/nlg/merge.py \
   --pretrained-dir checkpoints/nlg/meta-llama-Meta-Llama-3.1-8B \
@@ -261,26 +267,3 @@ scripts/                      # Entry points (run directly)
     ├── eval_task_addition.py
     └── eval_task_negation.py
 ```
-
-In this section we discuss the theoretical guarantees of the layer-wise objective in~\ref{eq:interference}. Despite  ignoring cross-layer interactions and nonlinearities, \citet{sun2025lot} showed that the absolute \emph{negative transfer}, is upper bounded by the layer-wise interference.
-More formally, let $\ell:\R^D\to\R$ denote a loss function applied to the output of network $f$. The negative transfer on task $t$ for input $\vx$ is defined as
-\begin{equation}
-    \label{eq:negative-transfer}
-    \Delta\ell_t(\vx) = 
-    \ell \left( f\left(\vx;\, \vtheta_0 + \vtau\right) \right) - 
-    \ell \left( f\left(\vx;\, \vtheta_t\right) \right),
-\end{equation}
-where $\vtheta_0 + \vtau$ denotes the merged model. 
-In this section we show that the absolute negative transfer \emph{negative transfer} is also upper bounded by the EigenCov covariance estimation error.
-Suppose neural network $f$ decomposes layer-wise as $f = g^{(L)} \circ \cdots \circ g^{(1)}$, where $g^{(l)}(\vz;\,\vtheta^{(l)})$ is the function computed by layer $l$ on input $\vz$. Denoting the composed output at layer $l$ by $f^{(l)}$, we have that
-\[
-f^{(0)}(\vx;\,\vtheta) = \vx, \qquad
-f^{(l)}(\vx;\,\vtheta) = g^{(l)}\!\Big(f^{(l-1)}(\vx;\,\vtheta);\;\vtheta^{(l)}\Big).
-\]
-Define the local error at layer $l$ as
-\[
-\Delta g^{(l)}_t(\vz) = 
-g^{(l)}\Big(\vz;\;\vtheta_0^{(l)} + \vtau^{(l)}\Big) -
-g^{(l)}\Big(\vz;\;\vtheta_t^{(l)}\Big).
-\]
-Intuitively, $\Delta g^{(l)}_t$ is the change in the output of layer $l$ when only that layer's parameters are merged. The following theorem formally states that the absolute negative transfer in~\eqref{eq:negative-transfer} can be upper bounded by weighted summations of local errors and covariance estimates at each layer.
