@@ -45,13 +45,11 @@ def combine_task_vectors(
 
     with torch.no_grad():
         new_vector = {}
-        for key in tqdm(
-            casted[0].vector,
-            desc="Merging task vectors",
-            total=len(casted[0].vector),
-            leave=False,
-        ):
-            if any(key not in v.vector for v in casted):
+        keys = casted[0].lazy_keys()
+        all_key_sets = [set(v.lazy_keys()) for v in casted]
+
+        for key in tqdm(keys, desc="Merging task vectors", leave=False):
+            if any(key not in ks for ks in all_key_sets):
                 # Skip keys that are not present in all vectors
                 continue
             # Stack on the merge device
@@ -64,7 +62,7 @@ def combine_task_vectors(
                 and max(taus[0].shape) < 10_000
             ):
                 # Only matrices can be merged using the merge function
-                merged = merge_fn(taus, key=key, vectors=vectors)
+                merged = merge_fn(taus, key=key, vectors=vectors, **kwargs)
             else:
                 # For all other tensors, we average the values
                 merged = taus.mean(dim=0)
@@ -139,7 +137,7 @@ def merge_tsv(taus: torch.Tensor, **kwargs) -> torch.Tensor:
 # ---------------------------------------------------------------------------
 # ISOC
 # ---------------------------------------------------------------------------
-def _merge_isoc(taus: torch.Tensor, mode="mean", **kwargs):
+def merge_isoc(taus: torch.Tensor, mode="mean", **kwargs):
     m = taus.sum(dim=0)
     u, s, vt = torch.linalg.svd(m, full_matrices=False)
     if mode == "mean":
@@ -153,10 +151,6 @@ def _merge_isoc(taus: torch.Tensor, mode="mean", **kwargs):
     else:
         raise ValueError(f"Unknown mode: {mode}")
     return torch.einsum("ik,k,kj->ij", u, s_iso, vt)
-
-
-merge_isoc_mean = lambda *args, **kwargs: _merge_isoc(*args, mode="mean", **kwargs)
-merge_isoc_rms = lambda *args, **kwargs: _merge_isoc(*args, mode="rms", **kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -176,21 +170,11 @@ def _merge_knots(taus: torch.Tensor, merge_fn: Callable, **kwargs) -> torch.Tens
     return torch.einsum("or,r,ri->oi", u, s, tau_tilde)
 
 
-merge_knots_ta = lambda *args, **kwargs: _merge_knots(
-    *args, merge_fn=merge_isoc_mean, **kwargs
-)
-merge_knots_isoc_mean = lambda *args, **kwargs: _merge_knots(
-    *args, merge_fn=merge_isoc_rms, **kwargs
-)
-merge_knots_isoc_rms = lambda *args, **kwargs: _merge_knots(
-    *args, merge_fn=merge_isoc_rms, **kwargs
+merge_knots_isoc = lambda *args, **kwargs: _merge_knots(
+    *args, merge_fn=merge_isoc, **kwargs
 )
 merge_knots_tsv = lambda *args, **kwargs: _merge_knots(
     *args, merge_fn=merge_tsv, **kwargs
-)
-
-merge_knots_eigcov = lambda *args, **kwargs: _merge_knots(
-    *args, merge_fn=merge_eigcov, **kwargs
 )
 
 
@@ -200,13 +184,9 @@ pinv = torch.linalg.pinv
 # ---------------------------------------------------------------------------
 # RegMean
 # ---------------------------------------------------------------------------
-# def _param_key_to_module_key(key: str):
-#     return "image_encoder." + key.replace(".weight", "")
 
 
-# Test normalized accuracy: 0.8934755825227096
-# Test absolute accuracy: 0.6888413285902395
-def _merge_regmean(
+def merge_regmean(
     tau: torch.Tensor,
     key: str,
     vectors: Sequence[_TaskVector],
@@ -243,21 +223,6 @@ def _merge_regmean(
         )
         c = scale_coef * c + (1 - scale_coef) * m_diag * c
     return (tau @ c).sum(dim=0) @ pinv(c.sum(dim=0))
-
-
-merge_regmean = lambda *args, **kwargs: _merge_regmean(*args, **kwargs)
-merge_regmean_09 = lambda *args, **kwargs: _merge_regmean(
-    *args, scale_coef=0.9, **kwargs
-)
-merge_regmean_08 = lambda *args, **kwargs: _merge_regmean(
-    *args, scale_coef=0.8, **kwargs
-)
-merge_regmean_mx1000 = lambda *args, **kwargs: _merge_regmean(
-    *args, max_dim=1000, **kwargs
-)
-merge_regmean_sc = lambda *args, **kwargs: _merge_regmean(
-    *args, sample_cov=True, **kwargs
-)
 
 
 # ---------------------------------------------------------------------------
@@ -297,42 +262,42 @@ def merge_fisher(
 # ---------------------------------------------------------------------------
 # Eigenvalue Covariance (EigCov)
 # ---------------------------------------------------------------------------
-def _get_eigcov(d: torch.Tensor, *args, **kwargs):
-    c = d.transpose(1, 2) @ d
-    return c
-
-
 def merge_eigcov(d: torch.Tensor, *args, **kwargs):
     c = d.transpose(1, 2) @ d
     return (d @ c).sum(dim=0) @ pinv(c.sum(dim=0))
 
 
-def merge_eigcov_fnorm(d: torch.Tensor, *args, **kwargs):
-    c = d.transpose(1, 2) @ d
-    c = c / (torch.linalg.norm(c, ord="fro", dim=(-2, -1), keepdim=True) ** 2)
-    return (d @ c).sum(dim=0) @ pinv(c.sum(dim=0))
-
-
-def merge_eigcov_lstsq(d: torch.Tensor, lam=0.0, *args, **kwargs):
-    # d: (T, Do, Di)
-    c = d.transpose(1, 2) @ d  # c: (T, Di, Di)
+def merge_eigcov_general(
+    d: torch.Tensor,
+    lam=0.0,
+    alpha_weighted=False,
+    cov_weighted=False,
+    solver="lstsq",
+    max_cond=42,
+    **kwargs,
+):
+    # # DEBUG:
+    # print(f"lam: {lam}, alpha_weighted: {alpha_weighted}, cov_weighted: {cov_weighted}")
 
     T, Do, Di = d.shape
 
-    # # alpha_t = 1 / ||d[t]||_F
-    # alpha = 1.0 / d.flatten(1).norm(dim=1)  # (T,)
-    # sqrt_alpha = alpha.sqrt()  # (T,)
-
-    sqrt_alpha = 1.0 / d.flatten(1).norm(dim=1)  # (T,)
+    if cov_weighted:
+        _c = d.transpose(1, 2) @ d  # (T, Di, Di)
+        # c = c / (torch.linalg.norm(c, ord="fro", dim=(-2, -1), keepdim=True) ** 2)
+        d = d / (torch.linalg.norm(_c, ord="fro", dim=(-2, -1), keepdim=True))
 
     # Factor each C_t = L_t L_t^T
-    e, v = torch.linalg.eigh(c)  # e: (T, Di), v: (T, Di, Di)
-    e = e.clamp(min=1e-8)
-    L = v * e.sqrt().unsqueeze(-2)  # (T, Di, Di)
+    # e, v = torch.linalg.eigh(c)  # e: (T, Di), v: (T, Di, Di)
+    # e = e.clamp(min=1e-8)
+    # L = v * e.sqrt().unsqueeze(-2)  # (T, Di, Di)
+    L = d
     Lt = L.transpose(-2, -1)  # (T, Di, Di)
 
     # Scale by sqrt(alpha_t)
-    Lt_scaled = sqrt_alpha[:, None, None] * Lt  # (T, Di, Di)
+    Lt_scaled = Lt
+    if alpha_weighted:
+        sqrt_alpha = 1.0 / d.flatten(1).norm(dim=1)  # (T,)
+        Lt_scaled = sqrt_alpha[:, None, None] * Lt  # (T, Di, Di)
 
     A = Lt_scaled.reshape(T * Di, Di)  # (T*Di, Di)
     B = (Lt_scaled @ d.transpose(-1, -2)).reshape(T * Di, Do)  # (T*Di, Do)
@@ -342,125 +307,67 @@ def merge_eigcov_lstsq(d: torch.Tensor, lam=0.0, *args, **kwargs):
         A = torch.cat([A, lam**0.5 * torch.eye(Di, Di, device=A.device)], dim=0)
         B = torch.cat([B, torch.zeros(Di, Do, device=B.device)], dim=0)
 
+    print(f"d.shape: {d.shape}, A.shape: {A.shape}, B.shape: {B.shape}")
     # Solve A @ X = B where X = W^T
-    result = torch.linalg.lstsq(A, B)
-    W = result.solution.T  # (Do, Di)
-
-    return W
-
-
-merge_eigcov_lstsq_00001 = lambda *args, **kwargs: merge_eigcov_lstsq(
-    *args, lam=0.0001, **kwargs
-)
-merge_eigcov_lstsq_0001 = lambda *args, **kwargs: merge_eigcov_lstsq(
-    *args, lam=0.001, **kwargs
-)
-merge_eigcov_lstsq_001 = lambda *args, **kwargs: merge_eigcov_lstsq(
-    *args, lam=0.01, **kwargs
-)
-merge_eigcov_lstsq_005 = lambda *args, **kwargs: merge_eigcov_lstsq(
-    *args, lam=0.05, **kwargs
-)
-merge_eigcov_lstsq_01 = lambda *args, **kwargs: merge_eigcov_lstsq(
-    *args, lam=0.1, **kwargs
-)
-merge_eigcov_lstsq_02 = lambda *args, **kwargs: merge_eigcov_lstsq(
-    *args, lam=0.2, **kwargs
-)
-merge_eigcov_lstsq_03 = lambda *args, **kwargs: merge_eigcov_lstsq(
-    *args, lam=0.3, **kwargs
-)
-merge_eigcov_lstsq_04 = lambda *args, **kwargs: merge_eigcov_lstsq(
-    *args, lam=0.4, **kwargs
-)
-merge_eigcov_lstsq_05 = lambda *args, **kwargs: merge_eigcov_lstsq(
-    *args, lam=0.5, **kwargs
-)
-
-# def merge_eigcov_lstsq(d: torch.Tensor, *args, **kwargs):
-#     # c = d.transpose(1, 2) @ d
-#     c = _get_eigcov(d)
-#     # eigen decomp
-#     e, v = torch.linalg.eigh(c)
-#     if lam > 0:
-#         cbar = c.sum(dim=0) + lam * torch.eye(
-#             c.shape[1], c.shape[2], device=c.device, dtype=c.dtype
-#         )
-#     else:
-#         cbar = c.sum(dim=0)
-#     return (d @ c).sum(dim=0) @ pinv(cbar)
+    try:
+        if solver == "lstsq":
+            result = torch.linalg.lstsq(A, B)
+            W = result.solution.T  # (Do, Di)
+        elif solver == "solve":
+            W = torch.linalg.solve(A.transpose(-2, -1) @ A, A.transpose(-2, -1) @ B).T
+        return W
+    except Exception as e:
+        print(f"[fallback] solve failed ({e}), using mean")
+        return d.mean(dim=0)
 
 
-def merge_eigcov_weighted_v1(d: torch.Tensor, lam: float = 0.0, *args, **kwargs):
-    c = _get_eigcov(d)
-    # Add regularization
-    gam = 1 / torch.linalg.norm(d, ord="fro", dim=(-2, -1), keepdim=True) ** 2
-    # Normalize gam
-    gam = gam / gam.sum(dim=0)
-    if lam > 0:
-        cbar = (c * gam).sum(dim=0) + lam * torch.eye(
-            c.shape[1], c.shape[2], device=c.device, dtype=c.dtype
-        )
-    else:
-        cbar = (c * gam).sum(dim=0)
-    print(f"gam: {gam}")
-    return (gam * d @ c).sum(dim=0) @ pinv(cbar)
+def merge_eigcov_gd(
+    d: torch.Tensor,
+    lam=0.0,
+    alpha_weighted=False,
+    cov_weighted=False,
+    lr=1e-3,
+    max_iters=1000,
+    thresh=1e-6,
+    **kwargs,
+) -> torch.Tensor:
+    """Gradient-descent solver for the EigCov objective.
 
+    Minimizes the same weighted least-squares loss as merge_eigcov_general:
+        L(W) = Σ_t tr((W - d_t) C_t (W - d_t)^T) + λ ‖W‖_F²
+    where C_t = d_t^T @ d_t.
+    """
+    C = d.transpose(1, 2) @ d  # (T, Di, Di)
 
-merge_eigcov_weighted_01 = lambda *args, **kwargs: merge_eigcov_weighted(
-    *args, lam=0.1, **kwargs
-)
-merge_eigcov_weighted_02 = lambda *args, **kwargs: merge_eigcov_weighted(
-    *args, lam=0.2, **kwargs
-)
-merge_eigcov_weighted_03 = lambda *args, **kwargs: merge_eigcov_weighted(
-    *args, lam=0.3, **kwargs
-)
-merge_eigcov_weighted_04 = lambda *args, **kwargs: merge_eigcov_weighted(
-    *args, lam=0.4, **kwargs
-)
-merge_eigcov_weighted_05 = lambda *args, **kwargs: merge_eigcov_weighted(
-    *args, lam=0.5, **kwargs
-)
-merge_eigcov_weighted_06 = lambda *args, **kwargs: merge_eigcov_weighted(
-    *args, lam=0.6, **kwargs
-)
-merge_eigcov_weighted_07 = lambda *args, **kwargs: merge_eigcov_weighted(
-    *args, lam=0.7, **kwargs
-)
-merge_eigcov_weighted_08 = lambda *args, **kwargs: merge_eigcov_weighted(
-    *args, lam=0.8, **kwargs
-)
-merge_eigcov_weighted_09 = lambda *args, **kwargs: merge_eigcov_weighted(
-    *args, lam=0.9, **kwargs
-)
-merge_eigcov_weighted_10 = lambda *args, **kwargs: merge_eigcov_weighted(
-    *args, lam=1.0, **kwargs
-)
+    if cov_weighted:
+        C = C / (torch.linalg.norm(C, ord="fro", dim=(-2, -1), keepdim=True) ** 2)
 
+    if alpha_weighted:
+        alpha = 1.0 / d.flatten(1).norm(dim=1)  # (T,)
+        C = alpha[:, None, None] * C  # (T, Di, Di)
 
-def _merge_eigcov_shr(d: torch.Tensor, lam: float = 0.0, *args, **kwargs):
-    # c = d.transpose(1, 2) @ d
-    c = _get_eigcov(d)
-    # return (d @ c).sum(dim=0) @ pinv(c.sum(dim=0))
-    if lam > 0:
-        cbar = c.sum(dim=0) + lam * torch.eye(
-            c.shape[1], c.shape[2], device=c.device, dtype=c.dtype
-        )
-    else:
-        cbar = c.sum(dim=0)
-    return (d @ c).sum(dim=0) @ pinv(cbar)
+    W = d.mean(dim=0).clone().requires_grad_(True)  # (Do, Di)
+    optimizer = torch.optim.Adam([W], lr=lr)
 
+    # Re-enable gradients inside the torch.no_grad() context of combine_task_vectors
+    with torch.enable_grad():
+        prev_loss = float("inf")
+        for i in range(int(max_iters)):
+            optimizer.zero_grad()
+            diff = W.unsqueeze(0) - d  # (T, Do, Di)
+            loss = (diff @ C).mul_(diff).sum()
+            if lam > 0:
+                loss = loss + lam * W.square().sum()
+            loss.backward()
+            optimizer.step()
 
-merge_eigcov_005 = lambda *args, **kwargs: _merge_eigcov_shr(*args, lam=0.05, **kwargs)
-merge_eigcov_001 = lambda *args, **kwargs: _merge_eigcov_shr(*args, lam=0.01, **kwargs)
-merge_eigcov_01 = lambda *args, **kwargs: _merge_eigcov_shr(*args, lam=0.1, **kwargs)
-merge_eigcov_02 = lambda *args, **kwargs: _merge_eigcov_shr(*args, lam=0.2, **kwargs)
-merge_eigcov_03 = lambda *args, **kwargs: _merge_eigcov_shr(*args, lam=0.3, **kwargs)
-merge_eigcov_04 = lambda *args, **kwargs: _merge_eigcov_shr(*args, lam=0.4, **kwargs)
-merge_eigcov_05 = lambda *args, **kwargs: _merge_eigcov_shr(*args, lam=0.5, **kwargs)
-merge_eigcov_06 = lambda *args, **kwargs: _merge_eigcov_shr(*args, lam=0.6, **kwargs)
-merge_eigcov_07 = lambda *args, **kwargs: _merge_eigcov_shr(*args, lam=0.7, **kwargs)
-merge_eigcov_08 = lambda *args, **kwargs: _merge_eigcov_shr(*args, lam=0.8, **kwargs)
-merge_eigcov_09 = lambda *args, **kwargs: _merge_eigcov_shr(*args, lam=0.9, **kwargs)
-merge_eigcov_10 = lambda *args, **kwargs: _merge_eigcov_shr(*args, lam=1.0, **kwargs)
+            cur_loss = loss.item()
+            if abs(prev_loss - cur_loss) / (abs(prev_loss) + 1e-12) < thresh:
+                print(f"[converged] loss={cur_loss:.1e} < {thresh:.1e}")
+                break
+            prev_loss = cur_loss
+
+    if i == int(max_iters) - 1:
+        print(f"[not converged] loss={cur_loss:.1e} after {max_iters} iters")
+
+    return W.detach()

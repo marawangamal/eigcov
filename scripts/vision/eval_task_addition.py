@@ -1,3 +1,4 @@
+import itertools
 import json
 import os
 
@@ -5,10 +6,9 @@ import os
 from src import mhap, mhas
 from src.args import parse_arguments
 from src.results_db import append_result, args_to_dict, make_run_hash, record_exists
-from src.vision.eval import evaluate_task_vector, evaluate_task_vector_at_coef
+from src.vision.eval import evaluate_task_vector_at_coef
 from src.merging import combine_task_vectors
 from src.vision.task_vectors import LinearizedTaskVector, NonLinearTaskVector
-from src.utils import find_optimal_coef
 
 args = parse_arguments()
 
@@ -72,12 +72,6 @@ _run_hash = (
 if args.results_db and record_exists(args.results_db, _run_hash):
     print(f"Skipping: matching record already exists in {args.results_db}")
     exit(0)
-
-# print("-" * 100)
-# print("DEBUG:")
-# print(f"Record to be saved: {_run_hash}")
-# print(json.dumps({"script": "eval_task_addition", **args_to_dict(args)}, indent=4))
-# print("-" * 100)
 
 print("*" * 100)
 if args.finetuning_mode == "standard":
@@ -172,15 +166,15 @@ if args.mha is not None:
     }[args.mha]
     task_vectors = [t.map(copy_fn) for t in task_vectors]
 
-task_vector = combine_task_vectors(task_vectors, merge_name, args)
-
-if args.mha is not None:
-    print(f"Mapping task vector back from {args.mha} MHA mode")
-    copy_fn = {
-        "packed": mhap.copy_to_pytorch_state_dict,
-        "split": mhas.copy_to_pytorch_state_dict,
-    }[args.mha]
-    task_vector = task_vector.map(copy_fn)
+# Build HP grid
+hpo = args.hpo or {}
+hp_names = list(hpo.keys())
+hp_value_lists = list(hpo.values())
+hp_combos = (
+    [dict(zip(hp_names, combo)) for combo in itertools.product(*hp_value_lists)]
+    if hp_names
+    else [{}]
+)
 
 args.control_dataset = None
 
@@ -194,47 +188,66 @@ def _set_eval_split(split):
         args.eval_datasets = list(eval_datasets)
 
 
-# Phase 1: coefficient selection on eval-val-split (optionally capped by eval-val-max-batches).
+def _merge_and_remap(merge_kwargs):
+    """Merge task vectors with given kwargs and apply MHA reverse remap if needed."""
+    tv = combine_task_vectors(task_vectors, merge_name, **merge_kwargs)
+    if args.mha is not None:
+        reverse_fn = {
+            "packed": mhap.copy_to_pytorch_state_dict,
+            "split": mhas.copy_to_pytorch_state_dict,
+        }[args.mha]
+        tv = tv.map(reverse_fn)
+    return tv
+
+
+# Phase 1: HP grid search on eval-val-split (optionally capped by eval-val-max-batches).
+best_val_score = -float("inf")
+best_merge_kwargs = {}
+best_val_metrics = {}
+
 _set_eval_split(args.eval_val_split)
 args.eval_max_batches = getattr(args, "eval_val_max_batches", None)
 print("=" * 100)
-if args.coeff_start == args.coeff_end:
-    optimal_coef = args.coeff_start
-    val_metrics = {}
-    print(f"PHASE 1: SKIPPED (single coefficient {optimal_coef})")
+if len(hp_combos) <= 1:
+    best_merge_kwargs = hp_combos[0] if hp_combos else {}
+    print(f"PHASE 1: SKIPPED (single HP combo: {best_merge_kwargs})")
 else:
     print(
-        f"PHASE 1: SPLIT={args.eval_val_split.upper()} — choosing optimal coefficient"
+        f"PHASE 1: SPLIT={args.eval_val_split.upper()} — grid search over {len(hp_combos)} HP combos"
         + (f" (max {args.eval_max_batches} batches)" if args.eval_max_batches else "")
     )
     print("=" * 100)
-    val_metrics = evaluate_task_vector(
-        task_vector,
-        pretrained_checkpoint,
-        args,
-        posthoc_linearization=args.finetuning_mode == "posthoc",
-    )
+    for merge_kwargs in hp_combos:
+        print(f"  {merge_kwargs}")
+        task_vector = _merge_and_remap(merge_kwargs)
+        metrics = evaluate_task_vector_at_coef(
+            task_vector,
+            pretrained_checkpoint,
+            args,
+            1.0,
+            posthoc_linearization=args.finetuning_mode == "posthoc",
+        )
+        score = metrics["avg_normalized_top1"]
+        print(f"  {merge_kwargs} -> avg_normalized_top1={score:.4f}")
+        if score > best_val_score:
+            best_val_score = score
+            best_merge_kwargs = merge_kwargs
+            best_val_metrics = metrics
 
-    optimal_coef = find_optimal_coef(
-        val_metrics,
-        metric="avg_normalized_top1",
-        minimize=False,
-    )
-print(f"Optimal coefficient (from phase 1): {optimal_coef}")
+print(f"Best merge HP (from phase 1): {best_merge_kwargs}")
 
-# Phase 2: evaluate at optimal coefficient on eval-test-split (use all batches).
+# Phase 2: evaluate at best HP combo on eval-test-split (use all batches).
 _set_eval_split(args.eval_test_split)
 args.eval_max_batches = None
 print("=" * 100)
-print(
-    f"PHASE 2: SPLIT={args.eval_test_split.upper()} — evaluating at optimal coefficient"
-)
+print(f"PHASE 2: SPLIT={args.eval_test_split.upper()} — evaluating at best HP combo")
 print("=" * 100)
+task_vector = _merge_and_remap(best_merge_kwargs)
 test_metrics = evaluate_task_vector_at_coef(
     task_vector,
     pretrained_checkpoint,
     args,
-    float(optimal_coef),
+    1.0,
     posthoc_linearization=args.finetuning_mode == "posthoc",
 )
 
@@ -243,8 +256,8 @@ print(f"Test normalized accuracy: {test_metrics['avg_normalized_top1']}")
 print(f"Test absolute accuracy: {test_metrics['avg_top1']}")
 additive_accuracies = {
     "test": test_metrics,
-    "val": val_metrics,
-    "optimal_coef": optimal_coef,
+    "val": best_val_metrics,
+    "optimal_merge_hp": best_merge_kwargs,
 }
 
 if args.finetuning_mode == "standard":
@@ -264,9 +277,9 @@ if args.results_db:
         {
             "script": "eval_task_addition",
             **args_to_dict(args),
-            "optimal_coef": optimal_coef,
+            "optimal_merge_hp": best_merge_kwargs,
             **{f"test_{k}": v for k, v in test_metrics.items()},
-            **{f"val_{k}": v for k, v in val_metrics.items()},
+            **{f"val_{k}": v for k, v in best_val_metrics.items()},
         },
         _run_hash,
     )

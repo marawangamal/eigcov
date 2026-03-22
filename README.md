@@ -149,23 +149,80 @@ source .venv/bin/activate
 
 # Multi-GPU full fine-tune with FSDP (required for 8B full fine-tune)
 torchrun --nproc_per_node=4 scripts/nlg/finetune.py \
-  --capability precise_if --fsdp \
-  --output-dir $SCRATCH/eigcov/checkpoints/nlg
+  --capability math --fsdp \
+  --output-dir $SCRATCH/eigcov/checkpoints/nlg \
+  --save-strategy steps --save-steps 200 --resume
 
 torchrun --nproc_per_node=4 scripts/nlg/finetune.py \
   --capability general --fsdp \
   --output-dir $SCRATCH/eigcov/checkpoints/nlg \
   --save-strategy steps
+  ```
 
+### 2. Merge
+```sh
+# Create param folders
+python scripts/nlg/save_model_param_folder.py --model pmahdavi/Llama-3.1-8B-coding --output-dir checkpoints/nlg/pmahdavi-Llama-3.1-8B-coding
+# ... do for all
+
+
+# Merge param folder
+method=mean
+python scripts/nlg/merge.py \
+  --pretrained-dir checkpoints/nlg/meta-llama-Meta-Llama-3.1-8B \
+  --finetuned-dirs \
+    checkpoints/nlg/pmahdavi-Llama-3.1-8B-math-reasoning \
+    checkpoints/nlg/pmahdavi-Llama-3.1-8B-coding \
+    checkpoints/nlg/pmahdavi-Llama-3.1-8B-precise-if \
+    checkpoints/nlg/pmahdavi-Llama-3.1-8B-general \
+    checkpoints/nlg/pmahdavi-Llama-3.1-8B-knowledge-recall \
+  --merge-func $method \
+  --output-dir checkpoints/nlg/pmahdavi-Llama-3.1-8B-$method
 ```
 
-### Setup (olmes evaluation)
+### 3. Upload 
 ```bash
-module load cuda/12.6 arrow python/3.12 httpproxy
-git clone https://github.com/allenai/olmes.git
-cd olmes
-uv sync
-uv sync --group gpu # for vLLM support
+# 
+hf upload mremila/Llama-3.1-8B-math checkpoints/nlg/Llama-3.1-8B-math --repo-type model                                            
+hf upload mremila/Llama-3.1-8B-coding checkpoints/nlg/Llama-3.1-8B-coding --repo-type model                                        
+hf upload mremila/Llama-3.1-8B-general checkpoints/nlg/Llama-3.1-8B-general --repo-type model                                      
+hf upload mremila/Llama-3.1-8B-knowledge checkpoints/nlg/Llama-3.1-8B-knowledge --repo-type model                                  
+hf upload mremila/Llama-3.1-8B-precise_if checkpoints/nlg/Llama-3.1-8B-precise_if --repo-type model    
+
+# Merged models
+hf upload mremila/pmahdavi-Llama-3.1-8B-eigcov checkpoints/nlg/pmahdavi-Llama-3.1-8B-eigcov--repo-type model  
+hf upload mremila/pmahdavi-Llama-3.1-8B-tsv    checkpoints/nlg/pmahdavi-Llama-3.1-8B-tsv --repo-type model    
+hf upload mremila/pmahdavi-Llama-3.1-8B-mean    checkpoints/nlg/pmahdavi-Llama-3.1-8B-mean --repo-type model    
+```
+
+### 4. Evaluate 
+```bash
+
+## Setup (olmes evaluation)
+# module load cuda/12.6 arrow python/3.12 httpproxy
+# git clone https://github.com/allenai/olmes.git
+# cd olmes
+# uv sync
+# uv sync --group gpu # for vLLM support
+
+## Run Evaluation
+method=eigcov
+olmes --model mremila/pmahdavi-Llama-3.1-8B-$method \
+--task  codex_humaneval::tulu codex_humanevalplus::tulu \
+gsm8k::tulu drop::llama3 minerva_math::tulu  \
+ifeval::tulu popqa::tulu "bbh:cot-v1::tulu" \
+--output-dir results-nlg-4096-$method \
+--gpus 1 \
+--model-type vllm \
+--model-args '{"gpu_memory_utilization": 0.8, "trust_remote_code": false, "max_length": 4096}' 
+
+
+
+# code only
+olmes \
+  --model checkpoints/nlg/pmahdavi-Llama-3.1-8B-eigcov \
+  --task codex_humaneval::tulu codex_humanevalplus::tulu \
+  --output-dir results-nlg 
 ```
 
 

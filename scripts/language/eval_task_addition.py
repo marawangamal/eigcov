@@ -1,15 +1,15 @@
+import itertools
 import json
 import os
 
 from src.language.args import parse_arguments
-from src.language.eval import evaluate_task_vector, evaluate_task_vector_at_coef
+from src.language.eval import evaluate_task_vector_at_coef
 from src.language.task_vectors import (
     LanguageLinearizedTaskVector,
     LanguageNonLinearTaskVector,
 )
 from src.merging import combine_task_vectors
 from src.results_db import append_result, args_to_dict, make_run_hash, record_exists
-from src.utils import find_optimal_coef
 
 T5_DATASETS = ["qasc", "wiki_qa", "quartz", "paws", "story_cloze", "winogrande", "wsc"]
 
@@ -92,8 +92,14 @@ merge_name = getattr(args, "merge_func", "sum")
 
 for dataset in eval_datasets:
     is_fisher = merge_name == "fisher"
-    cov_path = f"{args.cov_dir}/covariance_{dataset}.npz" if args.cov_dir and not is_fisher else None
-    fisher_path = f"{args.cov_dir}/fisher_{dataset}.npz" if args.cov_dir and is_fisher else None
+    cov_path = (
+        f"{args.cov_dir}/covariance_{dataset}.npz"
+        if args.cov_dir and not is_fisher
+        else None
+    )
+    fisher_path = (
+        f"{args.cov_dir}/fisher_{dataset}.npz" if args.cov_dir and is_fisher else None
+    )
     if args.finetuning_mode == "linear":
         pretrained_checkpoint = f"{args.save}/{dataset}/linear_zeroshot.pt"
         finetuned_checkpoint = f"{args.save}/{dataset}/linear_finetuned.pt"
@@ -129,7 +135,15 @@ for dataset in eval_datasets:
         )
     print(f"Task vector {dataset} loaded")
 
-task_vector = combine_task_vectors(task_vectors, merge_name, args)
+# Build HP grid
+hpo = args.hpo or {}
+hp_names = list(hpo.keys())
+hp_value_lists = list(hpo.values())
+hp_combos = (
+    [dict(zip(hp_names, combo)) for combo in itertools.product(*hp_value_lists)]
+    if hp_names
+    else [{}]
+)
 
 args.control_dataset = None
 
@@ -139,48 +153,55 @@ def _set_eval_split(split):
     args.eval_max_batches = None
 
 
-# Phase 1: coefficient selection on eval-val-split
+# Phase 1: HP grid search on eval-val-split
+best_val_score = -float("inf")
+best_merge_kwargs = {}
+best_val_metrics = {}
+
 _set_eval_split(args.eval_val_split)
 args.eval_max_batches = getattr(args, "eval_val_max_batches", None)
 print("=" * 100)
-if args.coeff_start == args.coeff_end:
-    optimal_coef = args.coeff_start
-    val_metrics = {}
-    print(f"PHASE 1: SKIPPED (single coefficient {optimal_coef})")
+if len(hp_combos) <= 1:
+    best_merge_kwargs = hp_combos[0] if hp_combos else {}
+    print(f"PHASE 1: SKIPPED (single HP combo: {best_merge_kwargs})")
 else:
     print(
-        f"PHASE 1: SPLIT={args.eval_val_split.upper()} — choosing optimal coefficient"
+        f"PHASE 1: SPLIT={args.eval_val_split.upper()} — grid search over {len(hp_combos)} HP combos"
         + (f" (max {args.eval_max_batches} batches)" if args.eval_max_batches else "")
     )
     print("=" * 100)
-    val_metrics = evaluate_task_vector(
-        args.eval_val_split,
-        task_vector,
-        pretrained_checkpoint,
-        args,
-    )
+    for merge_kwargs in hp_combos:
+        print(f"  {merge_kwargs}")
+        task_vector = combine_task_vectors(task_vectors, merge_name, **merge_kwargs)
+        metrics = evaluate_task_vector_at_coef(
+            args.eval_val_split,
+            task_vector,
+            pretrained_checkpoint,
+            args,
+            1.0,
+        )
+        score = metrics["avg_normalized_top1"]
+        print(f"  {merge_kwargs} -> avg_normalized_top1={score:.4f}")
+        if score > best_val_score:
+            best_val_score = score
+            best_merge_kwargs = merge_kwargs
+            best_val_metrics = metrics
 
-    optimal_coef = find_optimal_coef(
-        val_metrics,
-        metric="avg_normalized_top1",
-        minimize=False,
-    )
-print(f"Optimal coefficient (from phase 1): {optimal_coef}")
+print(f"Best merge HP (from phase 1): {best_merge_kwargs}")
 
-# Phase 2: evaluate at optimal coefficient on eval-test-split
+# Phase 2: evaluate at best HP combo on eval-test-split
 _set_eval_split(args.eval_test_split)
 args.eval_max_batches = None
 print("=" * 100)
-print(
-    f"PHASE 2: SPLIT={args.eval_test_split.upper()} — evaluating at optimal coefficient"
-)
+print(f"PHASE 2: SPLIT={args.eval_test_split.upper()} — evaluating at best HP combo")
 print("=" * 100)
+task_vector = combine_task_vectors(task_vectors, merge_name, **best_merge_kwargs)
 test_metrics = evaluate_task_vector_at_coef(
     args.eval_test_split,
     task_vector,
     pretrained_checkpoint,
     args,
-    float(optimal_coef),
+    1.0,
 )
 
 print("=" * 100)
@@ -189,8 +210,8 @@ print(f"Test absolute accuracy: {test_metrics['avg_top1']}")
 
 additive_accuracies = {
     "test": test_metrics,
-    "val": val_metrics,
-    "optimal_coef": optimal_coef,
+    "val": best_val_metrics,
+    "optimal_merge_hp": best_merge_kwargs,
 }
 
 if args.finetuning_mode == "standard":
@@ -210,9 +231,9 @@ if args.results_db:
         {
             "script": "eval_task_addition",
             **args_to_dict(args),
-            "optimal_coef": optimal_coef,
+            "optimal_merge_hp": best_merge_kwargs,
             **{f"test_{k}": v for k, v in test_metrics.items()},
-            **{f"val_{k}": v for k, v in val_metrics.items()},
+            **{f"val_{k}": v for k, v in best_val_metrics.items()},
         },
         _run_hash,
     )

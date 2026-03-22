@@ -37,10 +37,7 @@ for MODEL in "${MODELS[@]}"; do
       --merge-func=eigcov \
       --cov-dir=None \
       --results-db="$RESULTS_DB" \
-      --hf-cache-dir="$HF_CACHE_DIR" \
-      --coeff-start=1.0 \
-      --coeff-end=1.0 \
-      --n-eval-points=1
+      --hf-cache-dir="$HF_CACHE_DIR"
 
     # 2. Collect covariances for all sample counts in one pass
     NUM_BATCHES_CSV=$(IFS=,; echo "${NUM_BATCHES_LIST[*]}")
@@ -65,10 +62,7 @@ for MODEL in "${MODELS[@]}"; do
         --merge-func=regmean \
         --cov-dir="$COV_DIR" \
         --results-db="$RESULTS_DB" \
-        --hf-cache-dir="$HF_CACHE_DIR" \
-        --coeff-start=1.0 \
-        --coeff-end=1.0 \
-        --n-eval-points=1
+        --hf-cache-dir="$HF_CACHE_DIR"
     done
   done
 done

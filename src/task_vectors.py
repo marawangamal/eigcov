@@ -26,6 +26,7 @@ class _TaskVector(abc.ABC):
         self._finetuned_checkpoint = finetuned_checkpoint
         self.cache_window = cache_window
         self._cache = {}
+        self._lazy_keys = None
         self.covariance_path = covariance_path
         self.fisher_path = fisher_path
         self._transform_fn = _transform_fn
@@ -51,6 +52,27 @@ class _TaskVector(abc.ABC):
             return v
         else:
             return self._vector
+
+    def lazy_keys(self):
+        """Return parameter keys without building the full diff vector.
+
+        In eager mode, returns keys from the stored vector.
+        In lazy mode, loads only the pretrained checkpoint to get keys,
+        avoiding the memory cost of computing the full diff.
+        """
+        if not self.lazy:
+            return list(self._vector.keys())
+        if self._lazy_keys is not None:
+            return self._lazy_keys
+        with torch.no_grad():
+            pretrained = self._load_checkpoint(self._pretrained_checkpoint)
+            sd = pretrained.state_dict() if hasattr(pretrained, "state_dict") else pretrained
+            self._lazy_keys = [
+                k for k in sd
+                if sd[k].dtype not in (torch.int64, torch.uint8)
+            ]
+            del pretrained, sd
+        return self._lazy_keys
 
     def get_vector_element(self, key: str):
         # Eager mode: just use the fully-built dict
@@ -78,6 +100,9 @@ class _TaskVector(abc.ABC):
             end_idx = start_idx + self.cache_window
             for k in all_keys[start_idx:end_idx]:
                 self._cache[k] = vector[k]
+
+        # Release the full vector dict — only cached window survives
+        del vector
 
         if key not in self._cache:
             raise KeyError(f"Key {key} not found in vector.")

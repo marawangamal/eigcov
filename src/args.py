@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 
 import torch
@@ -145,22 +146,11 @@ def parse_arguments():
         help="Comma-separated list of target parameters for LoRA.",
     )
     parser.add_argument(
-        "--coeff-start",
-        type=float,
-        default=1.0,
-        help="Start coefficient for evaluation.",
-    )
-    parser.add_argument(
-        "--coeff-end",
-        type=float,
-        default=1.0,
-        help="End coefficient for evaluation.",
-    )
-    parser.add_argument(
-        "--n-eval-points",
-        type=int,
-        default=1,
-        help="Number of evaluation points used to find optimal coefficient in task arithmetic.",
+        "--hpo",
+        type=json.loads,
+        default=None,
+        help='JSON dict of HP grid. Keys are merge function kwargs, values are lists. '
+             'Example: \'{"lam": [0.0, 0.1, 0.2]}\'',
     )
     parser.add_argument(
         "--overwrite",

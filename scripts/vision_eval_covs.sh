@@ -45,10 +45,7 @@ for MODEL in "${MODELS[@]}"; do
       --merge-func=eigcov \
       --mha=split \
       --cov-dir=None \
-      --results-db="$RESULTS_DB" \
-      --coeff-start=1.0 \
-      --coeff-end=1.0 \
-      --n-eval-points=1
+      --results-db="$RESULTS_DB"
 
     # 2. Collect covariances for all sample counts in one pass
     NUM_BATCHES_CSV=$(IFS=,; echo "${NUM_BATCHES_LIST[*]}")
@@ -77,10 +74,7 @@ for MODEL in "${MODELS[@]}"; do
         --merge-func=regmean \
         --mha=split \
         --cov-dir="$COV_DIR" \
-        --results-db="$RESULTS_DB" \
-        --coeff-start=1.0 \
-        --coeff-end=1.0 \
-        --n-eval-points=1
+        --results-db="$RESULTS_DB"
     done
   done
 done
@@ -96,11 +90,8 @@ done
 #   --data-location="$SLURM_TMPDIR/datasets" \
 #   --merge-func=regmean \
 #   --mha=split \
-#   --coeff-start=1.0 \
-#   --coeff-end=1.0 \
-#   --n-eval-points=1 \
 #   --save="checkpoints-v1/ViT-B-16" \
-#   --cov-dir="results-v1/ViT-B-16/covariances_strain_n1000_b1_tsm_attnsplit_efull_ftstandard" 
+#   --cov-dir="results-v1/ViT-B-16/covariances_strain_n1000_b1_tsm_attnsplit_efull_ftstandard"
 
 
 # Test normalized accuracy: 0.9265262701184132
@@ -111,13 +102,10 @@ done
 #   --data-location="$SLURM_TMPDIR/datasets" \
 #   --merge-func=regmean \
 #   --mha=split \
-#   --coeff-start=1.0 \
-#   --coeff-end=1.0 \
-#   --n-eval-points=1 \
 #   --save="checkpoints-v2/ViT-B-16" \
-#   --cov-dir="results-v2/ViT-B-16/covariances_strain_n1000_b1_tsm_attnsplit_efull_ftstandard" 
+#   --cov-dir="results-v2/ViT-B-16/covariances_strain_n1000_b1_tsm_attnsplit_efull_ftstandard"
 
 
 # Test normalized accuracy: 0.9185090906665918
 # Test absolute accuracy: 0.8528623753209148
-# python scripts/vision/eval_task_addition.py   --model="ViT-B-16"   --finetuning-mode="standard"   --data-location="$SLURM_TMPDIR/datasets"   --merge-func=regmean   --mha=split   --coeff-start=1.0   --coeff-end=1.0   --n-eval-points=1   --save="checkpoints-v1/ViT-B-16"   --cov-dir="results-v1/ViT-B-16/covariances_strain_n500_b1_tsm_attnsplit_efull_ftstandard" 
+# python scripts/vision/eval_task_addition.py   --model="ViT-B-16"   --finetuning-mode="standard"   --data-location="$SLURM_TMPDIR/datasets"   --merge-func=regmean   --mha=split   --save="checkpoints-v1/ViT-B-16"   --cov-dir="results-v1/ViT-B-16/covariances_strain_n500_b1_tsm_attnsplit_efull_ftstandard"

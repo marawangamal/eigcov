@@ -22,29 +22,24 @@ HF_CACHE_DIR="$SCRATCH/hf_cache"
 NUM_BATCHES=10
 BATCH_SIZE=32
 
-# ===== Hyperparameter-optimized experiments =====
-# Only evaluate TA (sum) since other methods do not require HP tuning.
-# Results are written to a separate database to avoid mixing with the
-# default runs.
-MODELS=(t5-base t5-large)
-METHODS=(sum)
-FT_MODES=(lora)
-RESULTS_DB="results/results-hpopt.jsonl"
-COEFF_START=0.0
-COEFF_END=1.0
-N_EVAL_POINTS=11
+# # ===== Hyperparameter-optimized experiments =====
+# # Only evaluate TA (sum) since other methods do not require HP tuning.
+# # Results are written to a separate database to avoid mixing with the
+# # default runs.
+# MODELS=(t5-base)
+# METHODS=(tsv eigcov)
+# FT_MODES=(standard)
+# RESULTS_DB="results/results-hpopt.jsonl"
+# HPO='{"alpha": [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]}'
 
-# # ===== Default experiments (no hyperparameter tuning) =====
-# # Evaluate all merging methods using their default settings.
-# # Results are stored in the main results database.
-# MODELS=(t5-large)
-# # METHODS=(eigcov isoc_mean tsv regmean sum mean)
-# METHODS=(eigcov isoc_mean knots_isoc_mean tsv knots_tsv regmean sum mean)
-# FT_MODES=(lora)
-# RESULTS_DB="results/results.jsonl"
-# COEFF_START=1.0
-# COEFF_END=1.0
-# N_EVAL_POINTS=1
+# ===== Default experiments (no hyperparameter tuning) =====
+# Evaluate all merging methods using their default settings.
+# Results are stored in the main results database.
+MODELS=(t5-large)
+METHODS=(isoc mean sum)
+FT_MODES=(standard)
+RESULTS_DB="results/results.jsonl"
+HPO=""
 
 
 for MODEL in "${MODELS[@]}"; do
@@ -99,15 +94,15 @@ for MODEL in "${MODELS[@]}"; do
 
       # 2b. Set cov-dir (only meaningful for regmean/fisher)
       if [ "$method" = "fisher" ]; then
-        COV_DIR="results/$MODEL/fisher_strain_n${NUM_BATCHES}_b${BATCH_SIZE}_ft${FT_MODE}"
+        COV_DIR="checkpoints/$MODEL/_fishers/fisher_strain_n${NUM_BATCHES}_b${BATCH_SIZE}_ft${FT_MODE}"
       elif [ "$method" = "regmean" ]; then
-        COV_DIR="results/$MODEL/covariances_strain_n${NUM_BATCHES}_b${BATCH_SIZE}_tsm_efull_ft${FT_MODE}"
+        COV_DIR="checkpoints/$MODEL/_covariances/covariances_strain_n${NUM_BATCHES}_b${BATCH_SIZE}_tsm_efull_ft${FT_MODE}"
       else
         COV_DIR="None"
       fi
 
       # 2c. Evaluate task addition
-      echo "[BASH] Running eval_task_addition.py | model: $MODEL | ft mode: $FT_MODE | method: $method | coeff start: $COEFF_START | coeff end: $COEFF_END | n eval points: $N_EVAL_POINTS"
+      echo "[BASH] Running eval_task_addition.py | model: $MODEL | ft mode: $FT_MODE | method: $method"
       python scripts/language/eval_task_addition.py \
         --model="$MODEL" \
         --finetuning-mode="$FT_MODE" \
@@ -115,9 +110,7 @@ for MODEL in "${MODELS[@]}"; do
         --cov-dir="$COV_DIR" \
         --results-db="$RESULTS_DB" \
         --hf-cache-dir="$HF_CACHE_DIR" \
-        --coeff-start="$COEFF_START" \
-        --coeff-end="$COEFF_END" \
-        --n-eval-points="$N_EVAL_POINTS"
+        ${HPO:+--hpo="$HPO"}
 
     done
   done
