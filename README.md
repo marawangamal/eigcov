@@ -219,13 +219,29 @@ ifeval::tulu popqa::tulu "bbh:cot-v1::tulu" \
 --model-args '{"gpu_memory_utilization": 0.8, "trust_remote_code": false, "max_length": 4096}' 
 
 
+## Run Evaluation (20K)
+method=isoc 
+olmes --model mremila/pmahdavi-Llama-3.1-8B-20K-$method \
+--task  codex_humaneval::tulu codex_humanevalplus::tulu \
+gsm8k::tulu drop::llama3 minerva_math::tulu  \
+ifeval::tulu popqa::tulu "bbh:cot-v1::tulu" \
+--output-dir results-nlg-4096-20K-$method \
+--gpus 2 \
+--model-type vllm \
+--model-args '{"gpu_memory_utilization": 0.9, "trust_remote_code": false, "max_length": 4096}' 
+
+
 
 # code only
 olmes \
-  --model checkpoints/nlg/pmahdavi-Llama-3.1-8B-eigcov \
-  --task codex_humaneval::tulu codex_humanevalplus::tulu \
-  --output-dir results-nlg 
+  --model mremila/Llama-3.1-8B-coding \
+  --task codex_humaneval::tulu  \
+  --output-dir results-nlg-lora-mremila-Llama-3.1-8B-coding \
+  --gpus 1 \
+  --model-type vllm  \
+  --model-args '{"gpu_memory_utilization": 0.9, "trust_remote_code": false, "max_length": 4096}' 
 ```
+<!-- codex_humanevalplus::tulu -->
 
 
 ## Repository Structure
