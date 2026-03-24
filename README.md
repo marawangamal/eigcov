@@ -167,7 +167,7 @@ python scripts/nlg/save_model_param_folder.py --model pmahdavi/Llama-3.1-8B-codi
 
 
 # Merge param folder
-method=mean
+method=eigcov
 python scripts/nlg/merge.py \
   --pretrained-dir checkpoints/nlg/meta-llama-Meta-Llama-3.1-8B \
   --finetuned-dirs \
@@ -190,9 +190,11 @@ hf upload mremila/Llama-3.1-8B-knowledge checkpoints/nlg/Llama-3.1-8B-knowledge 
 hf upload mremila/Llama-3.1-8B-precise_if checkpoints/nlg/Llama-3.1-8B-precise_if --repo-type model    
 
 # Merged models
-hf upload mremila/pmahdavi-Llama-3.1-8B-eigcov checkpoints/nlg/pmahdavi-Llama-3.1-8B-eigcov--repo-type model  
-hf upload mremila/pmahdavi-Llama-3.1-8B-tsv    checkpoints/nlg/pmahdavi-Llama-3.1-8B-tsv --repo-type model    
-hf upload mremila/pmahdavi-Llama-3.1-8B-mean    checkpoints/nlg/pmahdavi-Llama-3.1-8B-mean --repo-type model    
+method=isoc
+echo "Uploading merged model for method: $method"
+hf upload mremila/pmahdavi-Llama-3.1-8B-$method checkpoints/nlg/pmahdavi-Llama-3.1-8B-$method --repo-type model
+echo "Upload complete to remote repo: mremila/pmahdavi-Llama-3.1-8B-$method"
+# 
 ```
 
 ### 4. Evaluate 
@@ -206,13 +208,13 @@ hf upload mremila/pmahdavi-Llama-3.1-8B-mean    checkpoints/nlg/pmahdavi-Llama-3
 # uv sync --group gpu # for vLLM support
 
 ## Run Evaluation
-method=eigcov
+method=isoc 
 olmes --model mremila/pmahdavi-Llama-3.1-8B-$method \
 --task  codex_humaneval::tulu codex_humanevalplus::tulu \
 gsm8k::tulu drop::llama3 minerva_math::tulu  \
 ifeval::tulu popqa::tulu "bbh:cot-v1::tulu" \
 --output-dir results-nlg-4096-$method \
---gpus 1 \
+--gpus 4 \
 --model-type vllm \
 --model-args '{"gpu_memory_utilization": 0.8, "trust_remote_code": false, "max_length": 4096}' 
 

@@ -59,7 +59,7 @@ def combine_task_vectors(
             if (
                 taus[0].ndim == 2
                 and "text_projection" not in key
-                and max(taus[0].shape) < 10_000
+                and max(taus[0].shape) < 20_000
             ):
                 # Only matrices can be merged using the merge function
                 merged = merge_fn(taus, key=key, vectors=vectors, **kwargs)
