@@ -18,6 +18,7 @@ Usage:
 """
 
 import argparse
+import json
 import os
 from pathlib import Path
 
@@ -89,6 +90,14 @@ def parse_args():
         help="Substrings of parameter keys to exclude from merging (averaged instead). "
         "E.g. --ignore-keys embed lm_head",
     )
+    parser.add_argument(
+        "--merge-kwargs",
+        type=json.loads,
+        default={},
+        help="JSON dict of extra kwargs for the merge function. "
+        'E.g. \'{"mix_primary": "eigcov_general", "mix_fallback": "eigcov", '
+        '"mix_targets": ["gate_proj"], "lam": 0.1}\'',
+    )
     return parser.parse_args()
 
 
@@ -147,7 +156,10 @@ def main():
 
     print(f"\nMerging {len(task_vectors)} task vectors with '{args.merge_func}' ...")
     merged_tv = combine_task_vectors(
-        task_vectors, args.merge_func, ignore_keys=args.ignore_keys
+        task_vectors,
+        args.merge_func,
+        ignore_keys=args.ignore_keys,
+        **args.merge_kwargs,
     )
 
     # Build final state dict: pretrained (from param-folder) + merged deltas.

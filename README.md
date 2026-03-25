@@ -156,7 +156,9 @@ torchrun --nproc_per_node=4 scripts/nlg/finetune.py \
 torchrun --nproc_per_node=4 scripts/nlg/finetune.py \
   --capability general --fsdp \
   --output-dir $SCRATCH/eigcov/checkpoints/nlg \
-  --save-strategy steps
+  --hf-cache-dir $SCRATCH/huggingface \
+  --use-lora \
+  --save-strategy steps --save-steps 200 --resume
   ```
 
 ### 2. Merge
@@ -182,8 +184,8 @@ python scripts/nlg/merge.py \
   --output-dir checkpoints/nlg/mremila-Llama-3.1-8B-${method} 
 
 # Merge param folder (ignore)
-method=eigcov
-ignore_keys="gate_proj up_proj"
+# ignore_keys="gate_proj up_proj"
+method=eigcov_gd
 python scripts/nlg/merge.py \
   --pretrained-dir checkpoints/nlg/meta-llama-Meta-Llama-3.1-8B \
   --finetuned-dirs \
@@ -193,8 +195,22 @@ python scripts/nlg/merge.py \
     checkpoints/nlg/pmahdavi-Llama-3.1-8B-general \
     checkpoints/nlg/pmahdavi-Llama-3.1-8B-knowledge-recall \
   --merge-func $method \
-  --output-dir checkpoints/nlg/pmahdavi-Llama-3.1-8B-${method}-ignore-${ignore_keys// /-} \
-  --ignore-keys $ignore_keys
+  --output-dir checkpoints/nlg/pmahdavi-Llama-3.1-8B-${method}
+  # --output-dir checkpoints/nlg/pmahdavi-Llama-3.1-8B-${method}-ignore-${ignore_keys// /-} \
+  # --ignore-keys $ignore_keys
+
+# Merge param folder (mix: two methods per-key)
+python scripts/nlg/merge.py \
+  --pretrained-dir checkpoints/nlg/meta-llama-Meta-Llama-3.1-8B \
+  --finetuned-dirs \
+    checkpoints/nlg/pmahdavi-Llama-3.1-8B-math-reasoning \
+    checkpoints/nlg/pmahdavi-Llama-3.1-8B-coding \
+    checkpoints/nlg/pmahdavi-Llama-3.1-8B-precise-if \
+    checkpoints/nlg/pmahdavi-Llama-3.1-8B-general \
+    checkpoints/nlg/pmahdavi-Llama-3.1-8B-knowledge-recall \
+  --merge-func mix \
+  --merge-kwargs '{"mix_primary": "eigcov_gd", "mix_fallback": "eigcov", "mix_targets": ["down_proj", "gate_proj", "up_proj"]}' \
+  --output-dir checkpoints/nlg/pmahdavi-Llama-3.1-8B-mix-eigcov_gd-eigcov_down_proj_gate_proj_up_proj
 ```
 
 ### 3. Upload 

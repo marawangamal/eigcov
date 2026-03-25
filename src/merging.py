@@ -31,7 +31,18 @@ def combine_task_vectors(
     assert len(vectors) > 0, "Need at least one task vector"
 
     # Get the function (must be defined in this module)
-    merge_fn = getattr(sys.modules[__name__], "merge_" + merge)
+    if merge == "mix":
+        _primary_fn = getattr(
+            sys.modules[__name__], "merge_" + kwargs.pop("mix_primary")
+        )
+        _fallback_fn = getattr(
+            sys.modules[__name__], "merge_" + kwargs.pop("mix_fallback")
+        )
+        _mix_targets = kwargs.pop("mix_targets", [])
+        merge_fn = None  # resolved per-key
+    else:
+        _mix_targets = None
+        merge_fn = getattr(sys.modules[__name__], "merge_" + merge)
 
     # Prefer GPU for merging if available; results are moved back to CPU so they
     # stay compatible with the rest of the pipeline.
@@ -66,8 +77,17 @@ def combine_task_vectors(
                 and not (ignore_keys and any(ik in key for ik in ignore_keys))
             ):
                 # Only matrices can be merged using the merge function
-                print(f"[{key}] merging layer with shape {taus[0].shape}")
-                merged = merge_fn(taus, key=key, vectors=vectors, **kwargs)
+                fn = merge_fn
+                if _mix_targets is not None:
+                    fn = (
+                        _primary_fn
+                        if any(t in key for t in _mix_targets)
+                        else _fallback_fn
+                    )
+                print(
+                    f"[{key}] merging layer with shape {taus[0].shape} ({fn.__name__})"
+                )
+                merged = fn(taus, key=key, vectors=vectors, **kwargs)
             else:
                 # For all other tensors, we average the values
                 merged = taus.mean(dim=0)
@@ -332,8 +352,8 @@ def merge_eigcov_gd(
     alpha_weighted=False,
     cov_weighted=False,
     lr=1e-3,
-    max_iters=1000,
-    thresh=1e-6,
+    max_iters=100,
+    thresh=1e-3,
     **kwargs,
 ) -> torch.Tensor:
     """Gradient-descent solver for the EigCov objective.
@@ -357,7 +377,8 @@ def merge_eigcov_gd(
     # Re-enable gradients inside the torch.no_grad() context of combine_task_vectors
     with torch.enable_grad():
         prev_loss = float("inf")
-        for i in range(int(max_iters)):
+        pbar = tqdm(range(int(max_iters)), desc="Gradient descent", leave=False)
+        for i in pbar:
             optimizer.zero_grad()
             diff = W.unsqueeze(0) - d  # (T, Do, Di)
             loss = (diff @ C).mul_(diff).sum()
@@ -371,6 +392,7 @@ def merge_eigcov_gd(
                 print(f"[converged] loss={cur_loss:.1e} < {thresh:.1e}")
                 break
             prev_loss = cur_loss
+            pbar.set_postfix(loss=cur_loss)
 
     if i == int(max_iters) - 1:
         print(f"[not converged] loss={cur_loss:.1e} after {max_iters} iters")
