@@ -162,12 +162,28 @@ torchrun --nproc_per_node=4 scripts/nlg/finetune.py \
 ### 2. Merge
 ```sh
 # Create param folders
-python scripts/nlg/save_model_param_folder.py --model pmahdavi/Llama-3.1-8B-coding --output-dir checkpoints/nlg/pmahdavi-Llama-3.1-8B-coding
+python scripts/nlg/save_model_param_folder.py --model mremila/Llama-3.1-8B-coding     --output-dir checkpoints/nlg/mremila-Llama-3.1-8B-coding
+python scripts/nlg/save_model_param_folder.py --model mremila/Llama-3.1-8B-precise_if --output-dir checkpoints/nlg/mremila-Llama-3.1-8B-precise_if
+python scripts/nlg/save_model_param_folder.py --model mremila/Llama-3.1-8B-general    --output-dir checkpoints/nlg/mremila-Llama-3.1-8B-general
+python scripts/nlg/save_model_param_folder.py --model mremila/Llama-3.1-8B-knowledge  --output-dir checkpoints/nlg/mremila-Llama-3.1-8B-knowledge
 # ... do for all
 
+# Merge param folder (lora)
+method=tsv
+python scripts/nlg/merge.py \
+  --pretrained-dir checkpoints/nlg/meta-llama-Meta-Llama-3.1-8B \
+  --finetuned-dirs \
+    checkpoints/nlg/mremila-Llama-3.1-8B-math \
+    checkpoints/nlg/mremila-Llama-3.1-8B-coding \
+    checkpoints/nlg/mremila-Llama-3.1-8B-precise-if \
+    checkpoints/nlg/mremila-Llama-3.1-8B-general \
+    checkpoints/nlg/mremila-Llama-3.1-8B-knowledge \
+  --merge-func $method \
+  --output-dir checkpoints/nlg/mremila-Llama-3.1-8B-${method} 
 
-# Merge param folder
+# Merge param folder (ignore)
 method=eigcov
+ignore_keys="gate_proj up_proj"
 python scripts/nlg/merge.py \
   --pretrained-dir checkpoints/nlg/meta-llama-Meta-Llama-3.1-8B \
   --finetuned-dirs \
@@ -177,7 +193,8 @@ python scripts/nlg/merge.py \
     checkpoints/nlg/pmahdavi-Llama-3.1-8B-general \
     checkpoints/nlg/pmahdavi-Llama-3.1-8B-knowledge-recall \
   --merge-func $method \
-  --output-dir checkpoints/nlg/pmahdavi-Llama-3.1-8B-$method
+  --output-dir checkpoints/nlg/pmahdavi-Llama-3.1-8B-${method}-ignore-${ignore_keys// /-} \
+  --ignore-keys $ignore_keys
 ```
 
 ### 3. Upload 
@@ -194,6 +211,10 @@ method=isoc
 echo "Uploading merged model for method: $method"
 hf upload mremila/pmahdavi-Llama-3.1-8B-$method checkpoints/nlg/pmahdavi-Llama-3.1-8B-$method --repo-type model
 echo "Upload complete to remote repo: mremila/pmahdavi-Llama-3.1-8B-$method"
+
+
+hf upload mremila/pmahdavi-Llama-3.1-8B-eigcov-ignore-gate_proj-up_proj checkpoints/nlg/pmahdavi-Llama-3.1-8B-eigcov-ignore-gate_proj-up_proj --repo-type model
+
 # 
 ```
 
@@ -232,10 +253,22 @@ ifeval::tulu popqa::tulu "bbh:cot-v1::tulu" \
 
 
 
-# code only
 olmes \
+  --model mremila/pmahdavi-Llama-3.1-8B-eigcov-ignore-gate_proj-up_proj \
+  --task  codex_humaneval::tulu codex_humanevalplus::tulu \
+  gsm8k::tulu drop::llama3 minerva_math::tulu  \
+  ifeval::tulu popqa::tulu "bbh:cot-v1::tulu" \
+  --output-dir results-nlg-eigcov-ignore-gate_proj-up_proj \
+  --gpus 1 \
+  --model-type vllm  \
+  --model-args '{"gpu_memory_utilization": 0.9, "trust_remote_code": false, "max_length": 4096}' 
+
+
+
+# code only
+CUDA_VISIBLE_DEVICES=0 olmes \
   --model mremila/Llama-3.1-8B-coding \
-  --task codex_humaneval::tulu  \
+  --task codex_humaneval::tulu    \
   --output-dir results-nlg-lora-mremila-Llama-3.1-8B-coding \
   --gpus 1 \
   --model-type vllm  \
@@ -285,3 +318,16 @@ scripts/                      # Entry points (run directly)
     ├── eval_task_addition.py
     └── eval_task_negation.py
 ```
+
+
+
+
+
+
+
+<!-- Running generate_until requests:  66%|█████████████████████████████████████████████████████████████████████████████████████████████████▉                                                  | 9439/14267 [06:02<03:53, 20.71it/s]
+Running generate_until requests:  66%|█████████████████████████████████████████████████████████████████████████████████████████████████▉                                                  | 9445/14267 [06:02<03:27, 23.22it/s]
+Running generate_until requests:  68%|████████████████████████████████████████████████████████████████████████████████████████████████████▍                                               | 9682/14267 [06:12<03:08, 24.31it/s]^C(Worker_TP1 pid=1864815) INFO 03-25 12:02:48 [multiproc_executor.py:558] Parent process exited, terminating worker
+(Worker_TP0 pid=1864814) INFO 03-25 12:02:48 [multiproc_executor.py:558] Parent process exited, terminating worker
+(Worker_TP3 pid=1864817) INFO 03-25 12:02:48 [multiproc_executor.py:558] Parent process exited, terminating worker
+(Worker_TP2 pid=1864816) INFO 03-25 12:02:48 [multiproc_executor.py:558] Parent process exited, terminating worker -->

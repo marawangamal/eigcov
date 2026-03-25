@@ -14,6 +14,7 @@ Usage:
             checkpoints/nlg/pmahdavi-Llama-3.1-8B-knowledge-recall \
         --merge-func eigcov \
         --output-dir checkpoints/nlg/merged-eigcov
+        --ignore-keys gate_proj up_proj
 """
 
 import argparse
@@ -81,6 +82,13 @@ def parse_args():
         default=None,
         help="HuggingFace cache directory.",
     )
+    parser.add_argument(
+        "--ignore-keys",
+        nargs="+",
+        default=None,
+        help="Substrings of parameter keys to exclude from merging (averaged instead). "
+        "E.g. --ignore-keys embed lm_head",
+    )
     return parser.parse_args()
 
 
@@ -138,7 +146,9 @@ def main():
         task_vectors.append(tv)
 
     print(f"\nMerging {len(task_vectors)} task vectors with '{args.merge_func}' ...")
-    merged_tv = combine_task_vectors(task_vectors, args.merge_func)
+    merged_tv = combine_task_vectors(
+        task_vectors, args.merge_func, ignore_keys=args.ignore_keys
+    )
 
     # Build final state dict: pretrained (from param-folder) + merged deltas.
     # Pop deltas as we go so memory stays ~32GB (deltas shrink, final weights grow).
@@ -164,7 +174,9 @@ def main():
     model.save_pretrained(output_dir)
 
     # Copy tokenizer — default to first finetuned dir (has chat_template).
-    tokenizer_dir = Path(args.tokenizer_dir) if args.tokenizer_dir else finetuned_dirs[0]
+    tokenizer_dir = (
+        Path(args.tokenizer_dir) if args.tokenizer_dir else finetuned_dirs[0]
+    )
     print(f"Copying tokenizer from {tokenizer_dir} ...")
     tokenizer = AutoTokenizer.from_pretrained(str(tokenizer_dir))
     tokenizer.save_pretrained(output_dir)

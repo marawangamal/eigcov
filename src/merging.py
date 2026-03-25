@@ -48,6 +48,8 @@ def combine_task_vectors(
         keys = casted[0].lazy_keys()
         all_key_sets = [set(v.lazy_keys()) for v in casted]
 
+        ignore_keys = kwargs.pop("ignore_keys", None) or []
+
         for key in tqdm(keys, desc="Merging task vectors", leave=False):
             if any(key not in ks for ks in all_key_sets):
                 # Skip keys that are not present in all vectors
@@ -60,8 +62,11 @@ def combine_task_vectors(
                 taus[0].ndim == 2
                 and "text_projection" not in key
                 and max(taus[0].shape) < 20_000
+                # and not in ignore_keys
+                and not (ignore_keys and any(ik in key for ik in ignore_keys))
             ):
                 # Only matrices can be merged using the merge function
+                print(f"[{key}] merging layer with shape {taus[0].shape}")
                 merged = merge_fn(taus, key=key, vectors=vectors, **kwargs)
             else:
                 # For all other tensors, we average the values
