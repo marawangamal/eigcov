@@ -91,13 +91,56 @@ if [[ ${#FINETUNED_DIRS[@]} -eq 0 ]]; then
   echo "Error: --finetuned-dirs requires at least one directory" >&2; exit 1
 fi
 
+# ── Auto-convert HF model IDs to param-folder format ─────────────────────────
+# If a dir doesn't exist locally, treat it as an HF model ID and download it.
+ensure_param_folder() {
+  local dir="$1"
+  if [[ -d "$dir" ]]; then
+    echo "$dir"
+    return
+  fi
+  # HF model ID (e.g. meta-llama/Meta-Llama-3.1-8B) → local path
+  local local_dir="${OUTPUT_BASE}/$(echo "$dir" | tr '/' '-')"
+  if [[ ! -d "$local_dir" ]]; then
+    echo ">>> Downloading ${dir} to ${local_dir} ..." >&2
+    python scripts/nlg/save_model_param_folder.py --model "$dir" --output-dir "$local_dir"
+  else
+    echo ">>> Using cached ${local_dir} for ${dir}" >&2
+  fi
+  echo "$local_dir"
+}
+
+PRETRAINED_DIR="$(ensure_param_folder "$PRETRAINED_DIR")"
+NEW_FT_DIRS=()
+for ft_dir in "${FINETUNED_DIRS[@]}"; do
+  NEW_FT_DIRS+=("$(ensure_param_folder "$ft_dir")")
+done
+FINETUNED_DIRS=("${NEW_FT_DIRS[@]}")
+
+# ── Build name suffix from merge-kwargs ───────────────────────────────────────
+KWARGS_SUFFIX=""
+if [[ -n "$MERGE_KWARGS" ]]; then
+  KWARGS_SUFFIX=$(python3 -c "
+import json, sys
+def flatten(v):
+    if isinstance(v, list): return [str(x) for x in v]
+    return [str(v)]
+d = json.loads(sys.argv[1])
+print('_'.join(x for v in d.values() for x in flatten(v)))
+" "$MERGE_KWARGS")
+fi
+
 # ── Run ───────────────────────────────────────────────────────────────────────
 MODEL_PREFIX="$(basename "$PRETRAINED_DIR")"
 RESULT_DIRS=()
 
 for method in $MERGE_FUNCS; do
-  OUTPUT_DIR="${OUTPUT_BASE}/${MODEL_PREFIX}-${method}"
-  RESULTS_DIR="${RESULTS_BASE}/${MODEL_PREFIX}-${method}"
+  RUN_NAME="${MODEL_PREFIX}-${method}"
+  if [[ -n "$KWARGS_SUFFIX" ]]; then
+    RUN_NAME="${RUN_NAME}-${KWARGS_SUFFIX}"
+  fi
+  OUTPUT_DIR="${OUTPUT_BASE}/${RUN_NAME}"
+  RESULTS_DIR="${RESULTS_BASE}/${RUN_NAME}"
 
   echo "============================================================"
   echo "Method     : ${method}"
