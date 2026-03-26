@@ -306,16 +306,17 @@ def merge_eigcov_general(
 
     T, Do, Di = d.shape
 
+    c = d.transpose(1, 2) @ d  # (T, Di, Di)
     if cov_weighted:
-        _c = d.transpose(1, 2) @ d  # (T, Di, Di)
-        # c = c / (torch.linalg.norm(c, ord="fro", dim=(-2, -1), keepdim=True) ** 2)
-        d = d / (torch.linalg.norm(_c, ord="fro", dim=(-2, -1), keepdim=True))
+        # _c = d.transpose(1, 2) @ d  # (T, Di, Di)
+        c = c / (torch.linalg.norm(c, ord="fro", dim=(-2, -1), keepdim=True) ** 2)
+        # d = d / (torch.linalg.norm(_c, ord="fro", dim=(-2, -1), keepdim=True))
 
     # Factor each C_t = L_t L_t^T
-    # e, v = torch.linalg.eigh(c)  # e: (T, Di), v: (T, Di, Di)
-    # e = e.clamp(min=1e-8)
-    # L = v * e.sqrt().unsqueeze(-2)  # (T, Di, Di)
-    L = d
+    e, v = torch.linalg.eigh(c)  # e: (T, Di), v: (T, Di, Di)
+    e = e.clamp(min=1e-8)
+    L = v * e.sqrt().unsqueeze(-2)  # (T, Di, Di)
+    # L = d
     Lt = L.transpose(-2, -1)  # (T, Di, Di)
 
     # Scale by sqrt(alpha_t)

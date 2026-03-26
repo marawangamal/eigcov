@@ -26,9 +26,9 @@ echo "============================================================"
 
 lm_eval \
     --model hf \
-    --model_args "pretrained=${MODEL},trust_remote_code=True,dtype=float16,prefix_token_id=0" \
+    --model_args "pretrained=${MODEL},trust_remote_code=True,dtype=float16" \
     --tasks "${TASKS}" \
-    --batch_size auto \
+    --batch_size 4 \
     --output_path "${OUTPUT_DIR}"
 
 echo "Results saved to ${OUTPUT_DIR}"
