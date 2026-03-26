@@ -166,7 +166,6 @@ def train_capability(capability, args):
         report_to="none",
         gradient_checkpointing=True,
         gradient_checkpointing_kwargs={"use_reentrant": False},
-        max_steps=2,
         **fsdp_kwargs,
     )
 

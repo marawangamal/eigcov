@@ -31,6 +31,7 @@ python scripts/twin/save_lora_param_folder.py --base-model Qwen/Qwen-14B --adapt
 python scripts/twin/save_lora_param_folder.py --base-model Qwen/Qwen-14B --adapter lu-vae/qwen-truthfulqa-merged --output-dir checkpoints/twin/qwen-truthfulqa-merged
 
 # 3. Merge (replace eigcov with mean/tsv/isoc for baselines)
+method=mean
 python scripts/nlg/merge.py \
     --pretrained-dir checkpoints/twin/Qwen-14B \
     --finetuned-dirs \
@@ -38,13 +39,14 @@ python scripts/nlg/merge.py \
         checkpoints/twin/qwen-cnn-merged \
         checkpoints/twin/qwen-mmlu-merged \
         checkpoints/twin/qwen-truthfulqa-merged \
-    --merge-func eigcov \
-    --output-dir checkpoints/twin/Qwen-14B-eigcov \
+    --merge-func $method \
+    --output-dir checkpoints/twin/Qwen-14B-$method \
     --trust-remote-code
 
 # 4. Evaluate
-bash scripts/twin/eval.sh checkpoints/twin/Qwen-14B-eigcov results/twin/eigcov
+bash scripts/twin/eval.sh checkpoints/twin/Qwen-14B-mean results/twin/mean
 
 # 5. Collect results
 python scripts/twin/collect_results.py --dirs results/twin/eigcov results/twin/mean results/twin/tsv results/twin/isoc
 ```
+

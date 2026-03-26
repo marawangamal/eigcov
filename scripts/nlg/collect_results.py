@@ -23,6 +23,8 @@ STANDALONE = {
     "popqa": "PopQA",
 }
 
+CODE_BENCHMARKS = {"HumanEval", "HumanEval+"}
+
 DISPLAY_ORDER = [
     "BBH-CoT",
     "HumanEval",
@@ -73,6 +75,11 @@ def parse_args():
         required=True,
         help="One or more olmes output directories containing *-metrics.json files.",
     )
+    parser.add_argument(
+        "--no-code",
+        action="store_true",
+        help="Omit code benchmarks (HumanEval, HumanEval+) from the table.",
+    )
     return parser.parse_args()
 
 
@@ -85,6 +92,8 @@ def main():
         name = p.name.replace("results-nlg-", "")
         all_results[name] = load_results(p)
 
+    display_order = [b for b in DISPLAY_ORDER if not (args.no_code and b in CODE_BENCHMARKS)]
+
     methods = list(all_results.keys())
     col_w = max(15, *(len(m) + 2 for m in methods))
 
@@ -92,7 +101,7 @@ def main():
     print(header)
     print("-" * len(header))
 
-    for bench in DISPLAY_ORDER:
+    for bench in display_order:
         row = f"{bench:<15}"
         for m in methods:
             val = all_results[m].get(bench)
@@ -102,7 +111,7 @@ def main():
     print("-" * len(header))
     row = f"{'Average':<15}"
     for m in methods:
-        vals = [all_results[m][b] for b in DISPLAY_ORDER if b in all_results[m]]
+        vals = [all_results[m][b] for b in display_order if b in all_results[m]]
         row += f"{sum(vals)/len(vals):{col_w}.3f}" if vals else f"{'—':>{col_w}}"
     print(row)
 

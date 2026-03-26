@@ -184,7 +184,10 @@ def main():
 
     # Save as HF checkpoint: create model on meta device, load state dict, save.
     trc = args.trust_remote_code
-    config = AutoConfig.from_pretrained(str(pretrained_dir), trust_remote_code=trc)
+    # When trust_remote_code is set, load config from HF Hub (has custom .py files)
+    # rather than the local param-folder dir (which only has config.json).
+    config_source = hf_model_id if trc else str(pretrained_dir)
+    config = AutoConfig.from_pretrained(config_source, trust_remote_code=trc)
     with torch.device("meta"):
         model = AutoModelForCausalLM.from_config(config, trust_remote_code=trc)
     model.load_state_dict(final_sd, assign=True)
