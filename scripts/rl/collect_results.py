@@ -9,32 +9,15 @@ import json
 import sys
 from pathlib import Path
 
-GROUPS = {
-    "bbh": "BBH-CoT",
-    "minerva_math": "MATH",
-}
-
 STANDALONE = {
-    "codex_humaneval": "HumanEval",
-    "codex_humanevalplus": "HumanEval+",
-    "drop": "DROP",
-    "gsm8k": "GSM8K",
-    "ifeval": "IFEval",
-    "popqa": "PopQA",
+    "codex_humaneval::tulu": "HumanEval",
+    "codex_humanevalplus::tulu": "HumanEval+",
+    "ifeval::tulu": "IFEval",
+    "aime:2024::olmo3:midtrain": "AIME 2024",
+    "aime:2025::olmo3:midtrain": "AIME 2025",
 }
 
-CODE_BENCHMARKS = {"HumanEval", "HumanEval+"}
-
-DISPLAY_ORDER = [
-    "BBH-CoT",
-    "HumanEval",
-    "HumanEval+",
-    "DROP",
-    "GSM8K",
-    "IFEval",
-    "MATH",
-    "PopQA",
-]
+DISPLAY_ORDER = ["HumanEval", "HumanEval+", "IFEval", "AIME 2024", "AIME 2025"]
 
 
 def load_results(results_dir: Path) -> dict[str, float]:
@@ -46,17 +29,12 @@ def load_results(results_dir: Path) -> dict[str, float]:
     task_scores: dict[str, float] = {}
     for f in metrics_files:
         data = json.loads(f.read_text())
-        task_name = data.get("task_name", "")
+        task_name = data["task_config"]["metadata"]["alias"]
         primary = data.get("metrics", {}).get("primary_score")
         if primary is not None:
             task_scores[task_name] = primary
 
     scores: dict[str, float] = {}
-
-    for prefix, display_name in GROUPS.items():
-        subtask_scores = [v for k, v in task_scores.items() if k.startswith(prefix)]
-        if subtask_scores:
-            scores[display_name] = sum(subtask_scores) / len(subtask_scores)
 
     for task_name, display_name in STANDALONE.items():
         if task_name in task_scores:
@@ -92,7 +70,7 @@ def main():
         name = p.name.replace("results-nlg-", "")
         all_results[name] = load_results(p)
 
-    display_order = [b for b in DISPLAY_ORDER if not (args.no_code and b in CODE_BENCHMARKS)]
+    display_order = [b for b in DISPLAY_ORDER]
 
     methods = list(all_results.keys())
     col_w = max(15, *(len(m) + 2 for m in methods))

@@ -5,15 +5,18 @@ Merge 5 capability-specialized LoRA fine-tunes and evaluate on BBH-CoT, HumanEva
 ## Setup
 
 ```sh
-module load cuda/12.6 arrow python/3.12 httpproxy
-export HF_HOME=$SCRATCH/huggingface
+
 # # olmes (evaluation framework)
 # git clone https://github.com/allenai/olmes.git
 # cd olmes && uv sync && uv sync --group gpu
+module load cuda/12.6 arrow python/3.12 httpproxy
+cd ../olmes-fixed
 source .venv/bin/activate
+cd ../eigcov
+export HF_HOME=$SCRATCH/huggingface
 export PYTHONPATH="$PYTHONPATH:$PWD"
 export SSL_CERT_DIR=/etc/ssl/certs
-python -c "import nltk; nltk.download('punkt', download_dir='$SCRATCH/nltk_data')"
+# python -c "import nltk; nltk.download('punkt', download_dir='$SCRATCH/nltk_data')"
 export NLTK_DATA=$SCRATCH/nltk_data
 ```
 
@@ -26,7 +29,7 @@ bash scripts/rl/eval_task_addition.sh \
     allenai/Olmo-3-7B-RL-Zero-Math \
     allenai/Olmo-3-7B-RL-Zero-Code \
     allenai/Olmo-3-7B-RL-Zero-IF \
-  --merge-funcs "eigcov tsv mean" \
+  --merge-funcs "mean isoc" \
   --gpus 4
 ```
 

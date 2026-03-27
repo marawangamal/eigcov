@@ -178,7 +178,7 @@ for method in $MERGE_FUNCS; do
   fi
 
   # 3. Evaluate via olmes (skip if results already exist)
-  if ls "$RESULTS_DIR"/*-metrics.json &>/dev/null; then
+  if ls "$RESULTS_DIR"/*-metrics-all.json &>/dev/null; then
     echo ">>> Skipping eval: ${RESULTS_DIR} already has results"
   else
     echo ">>> Evaluating with olmes ..."

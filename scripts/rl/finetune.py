@@ -1,33 +1,34 @@
-"""Fine-tune Olmo-3-7B on individual capability subsets of the Dolci RL-Zero datasets.
+"""Collect per-layer activation covariances for Olmo-3-7B on Dolci RL-Zero datasets.
 
-Each capability is trained separately to produce a specialist checkpoint,
-which can later be merged using scripts/rl/merge.py.
+Runs SFTTrainer with lr=0 (no weight updates) while forward hooks from
+src/covariance.py capture activation statistics.  Each capability produces
+a covariance NPZ file that can be used by RegMean or other covariance-based
+merge methods.
 
-Uses allenai/Dolci-RL-Zero-{Math|Code|IF}-7B datasets (~13k examples each),
-each containing prompts and ground-truth answers for SFT training.
+Uses allenai/Dolci-RL-Zero-{Math|Code|IF}-7B datasets (~13k examples each).
 
 
 Usage:
     pip install datasets transformers trl peft
 
-    # Single GPU (LoRA)
-    python scripts/rl/finetune.py --capability math --use-lora --hf-cache-dir $SCRATCH/huggingface
-
-    # Multi-GPU full fine-tune with FSDP (recommended for 7B without LoRA)
-    torchrun --nproc_per_node=4 scripts/rl/finetune.py --capability math --fsdp --hf-cache-dir $SCRATCH/huggingface
+    # Single GPU
+    python scripts/rl/finetune.py --capability math --hf-cache-dir $SCRATCH/huggingface
 
     # All capabilities
-    torchrun --nproc_per_node=4 scripts/rl/finetune.py --capability all --fsdp --hf-cache-dir $SCRATCH/huggingface
+    python scripts/rl/finetune.py --capability all --hf-cache-dir $SCRATCH/huggingface
 """
 
 import argparse
 import os
 
+import numpy as np
 import torch
 from datasets import load_dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from trl import SFTTrainer, SFTConfig
 from peft import LoraConfig
+
+from src.covariance import register_hooks
 
 PRETRAINED_MODEL = "allenai/Olmo-3-1025-7B"
 MAX_SEQ_LEN = 4096
@@ -61,7 +62,7 @@ def parse_args():
     p.add_argument("--num-epochs", type=int, default=1)
     p.add_argument("--batch-size", type=int, default=2)
     p.add_argument("--grad-accum", type=int, default=32)
-    p.add_argument("--lr", type=float, default=5e-6)
+    p.add_argument("--lr", type=float, default=0)
     p.add_argument("--warmup-ratio", type=float, default=0.03)
     p.add_argument("--use-lora", action="store_true")
     p.add_argument("--lora-r", type=int, default=64)
@@ -81,6 +82,20 @@ def parse_args():
         "--resume",
         action="store_true",
         help="Resume training from latest checkpoint in output dir",
+    )
+    p.add_argument(
+        "--cov-type",
+        type=str,
+        default="sm",
+        choices=["sm", "cov"],
+        help="Covariance mode: 'sm' for second moment, 'cov' for centered covariance",
+    )
+    p.add_argument(
+        "--cov-estimator",
+        type=str,
+        default="avg",
+        choices=["avg", "sampled", "full"],
+        help="How to sample activations: 'avg' per-token, 'sampled' one random token, 'full' DxT",
     )
     return p.parse_args()
 
@@ -148,6 +163,15 @@ def train_capability(capability, args):
         cache_dir=args.hf_cache_dir,
     )
 
+    # Register forward hooks to collect activation covariances
+    cobjs, handles = register_hooks(
+        model,
+        cov_device="cpu",
+        cov_type=args.cov_type,
+        cov_estimator=args.cov_estimator,
+        batch_first=True,
+    )
+
     fsdp_kwargs = {}
     if args.fsdp:
         fsdp_kwargs["fsdp"] = "full_shard auto_wrap"
@@ -164,12 +188,11 @@ def train_capability(capability, args):
         lr_scheduler_type="linear",
         bf16=args.bf16,
         logging_steps=10,
-        save_strategy=args.save_strategy,
-        **({f"save_steps": args.save_steps} if args.save_strategy == "steps" else {}),
-        save_total_limit=2,
+        save_strategy="no",
         report_to="none",
-        gradient_checkpointing=True,
-        gradient_checkpointing_kwargs={"use_reentrant": False},
+        # Disable gradient checkpointing — it recomputes forward passes
+        # during backward, which would trigger hooks twice per batch.
+        gradient_checkpointing=False,
         **fsdp_kwargs,
     )
 
@@ -201,9 +224,19 @@ def train_capability(capability, args):
 
     trainer.train(resume_from_checkpoint=args.resume)
 
-    print(f"Saving to {run_dir} ...")
-    trainer.save_model(run_dir)
-    tokenizer.save_pretrained(run_dir)
+    # Remove hooks and save covariance matrices
+    for h in handles:
+        h.remove()
+
+    saveable = {}
+    for name, cobj in cobjs.items():
+        saveable[name] = cobj.cov.cpu().numpy()
+        saveable[f"{name}_n"] = cobj.n
+
+    os.makedirs(run_dir, exist_ok=True)
+    cov_path = os.path.join(run_dir, f"covariance_{capability}.npz")
+    np.savez(cov_path, **saveable)
+    print(f"Saved covariances ({len(cobjs)} layers) to {cov_path}")
     print(f"Done: {capability}")
 
 
@@ -219,3 +252,25 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# EigCov
+# codex_humaneval::tulu: 0.837081
+# codex_humanevalplus::tulu: 0.797757
+# ifeval::tulu: 0.469501
+# aime:2024::olmo3:midtrain: 0.0854167
+# aime:2025::olmo3:midtrain: 0.109375
+
+# TSV
+# codex_humaneval::tulu: 0.8238
+# codex_humanevalplus::tulu: 0.790259
+# ifeval::tulu: 0.340111
+# aime:2024::olmo3:midtrain: 0.120833
+# aime:2025::olmo3:midtrain: 0.141667
+
+# Isoc
+# codex_humaneval::tulu: 0.847963
+# codex_humanevalplus::tulu: 0.792782
+# ifeval::tulu: 0.288355
+# aime:2024::olmo3:midtrain: 0.122917
+# aime:2025::olmo3:midtrain: 0.161458
