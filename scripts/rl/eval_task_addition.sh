@@ -1,18 +1,18 @@
 #!/bin/bash
-# Merge + evaluate NLG models in one shot.
+# Merge + evaluate rl models in one shot.
 #
 # For each merge method: runs merge.py, optionally uploads to HF Hub,
 # evaluates via olmes, then collects all results into a summary table.
 #
 # Usage:
-#   bash scripts/nlg/eval_task_addition.sh \
-#     --pretrained-dir checkpoints/nlg/meta-llama-Meta-Llama-3.1-8B \
+#   bash scripts/rl/eval_task_addition.sh \
+#     --pretrained-dir checkpoints/rl/meta-llama-Meta-Llama-3.1-8B \
 #     --finetuned-dirs \
-#       checkpoints/nlg/pmahdavi-Llama-3.1-8B-math-reasoning \
-#       checkpoints/nlg/pmahdavi-Llama-3.1-8B-coding \
-#       checkpoints/nlg/pmahdavi-Llama-3.1-8B-precise-if \
-#       checkpoints/nlg/pmahdavi-Llama-3.1-8B-general \
-#       checkpoints/nlg/pmahdavi-Llama-3.1-8B-knowledge-recall \
+#       checkpoints/rl/pmahdavi-Llama-3.1-8B-math-reasoning \
+#       checkpoints/rl/pmahdavi-Llama-3.1-8B-coding \
+#       checkpoints/rl/pmahdavi-Llama-3.1-8B-precise-if \
+#       checkpoints/rl/pmahdavi-Llama-3.1-8B-general \
+#       checkpoints/rl/pmahdavi-Llama-3.1-8B-knowledge-recall \
 #     --merge-funcs "eigcov tsv isoc mean" \
 #     --gpus 4
 
@@ -21,9 +21,9 @@ set -euo pipefail
 # ── Defaults ──────────────────────────────────────────────────────────────────
 PRETRAINED_DIR=""
 FINETUNED_DIRS=()
-MERGE_FUNCS="eigcov tsv isoc mean"
-OUTPUT_BASE="checkpoints/nlg"
-RESULTS_BASE="results-nlg"
+MERGE_FUNCS="eigcov tsv mean isoc"
+OUTPUT_BASE="checkpoints/rl"
+RESULTS_BASE="results-rl"
 GPUS=4
 UPLOAD=""          # HF Hub user/org prefix; empty = skip upload
 MERGE_KWARGS=""    # JSON string forwarded to merge.py --merge-kwargs
@@ -35,12 +35,9 @@ BATCH_SIZE=128     # olmes batch size
 OLMES_TASKS=(
   "codex_humaneval::tulu"
   "codex_humanevalplus::tulu"
-  "gsm8k::tulu"
-  "drop::llama3"
-  "minerva_math::tulu"
   "ifeval::tulu"
-  "popqa::tulu"
-  "bbh:cot-v1::tulu"
+  aime:2024::olmo3:midtrain
+  aime:2025::olmo3:midtrain
 )
 OLMES_MODEL_ARGS='{"gpu_memory_utilization": 0.8, "trust_remote_code": false, "max_length": 4096}'
 
@@ -104,7 +101,7 @@ ensure_param_folder() {
   local local_dir="${OUTPUT_BASE}/$(echo "$dir" | tr '/' '-')"
   if [[ ! -d "$local_dir" ]]; then
     echo ">>> Downloading ${dir} to ${local_dir} ..."
-    python scripts/nlg/save_model_param_folder.py --model "$dir" --output-dir "$local_dir"
+    python scripts/rl/save_model_param_folder.py --model "$dir" --output-dir "$local_dir"
   else
     echo ">>> Using cached ${local_dir} for ${dir}"
   fi
@@ -156,7 +153,7 @@ for method in $MERGE_FUNCS; do
     echo ">>> Skipping merge: ${OUTPUT_DIR} already exists"
   else
     MERGE_CMD=(
-      python scripts/nlg/merge.py
+      python scripts/rl/merge.py
       --pretrained-dir "$PRETRAINED_DIR"
       --finetuned-dirs "${FINETUNED_DIRS[@]}"
       --merge-func "$method"
@@ -203,7 +200,7 @@ done
 echo "============================================================"
 echo "Collecting results ..."
 echo "============================================================"
-COLLECT_CMD=(python scripts/nlg/collect_results.py --dirs "${RESULT_DIRS[@]}")
+COLLECT_CMD=(python scripts/rl/collect_results.py --dirs "${RESULT_DIRS[@]}")
 if [[ -n "$NO_CODE" ]]; then
   COLLECT_CMD+=(--no-code)
 fi
