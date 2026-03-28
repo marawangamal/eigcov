@@ -40,12 +40,12 @@ for MODEL_ID in "${MODEL_IDS[@]}"; do
       codex_humaneval::tulu \
       codex_humanevalplus::tulu \
       ifeval::tulu \
-      aime:2024::olmo3:midtrain \
-      aime:2025::olmo3:midtrain \
+      aime:zs_cot_r1::pass_at_32_2024_deepseek \
+      aime:zs_cot_r1::pass_at_32_2025_deepseek \
     --output-dir $OUTPUT_DIR \
     --gpus 4 \
     --model-type vllm \
-    --model-args '{"gpu_memory_utilization": 0.8, "trust_remote_code": false, "max_length": 4096}' \
+    --model-args '{"gpu_memory_utilization": 0.8, "trust_remote_code": false, "max_length": 16384}' \
     --batch-size 128
 done
 

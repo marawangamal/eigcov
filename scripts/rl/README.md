@@ -29,7 +29,7 @@ bash scripts/rl/eval_task_addition.sh \
     allenai/Olmo-3-7B-RL-Zero-Math \
     allenai/Olmo-3-7B-RL-Zero-Code \
     allenai/Olmo-3-7B-RL-Zero-IF \
-  --merge-funcs "mean isoc" \
+  --merge-funcs "eigcov tsv mean isoc" \
   --gpus 4
 ```
 

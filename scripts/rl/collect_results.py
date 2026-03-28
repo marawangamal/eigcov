@@ -13,11 +13,22 @@ STANDALONE = {
     "codex_humaneval::tulu": "HumanEval",
     "codex_humanevalplus::tulu": "HumanEval+",
     "ifeval::tulu": "IFEval",
-    "aime:2024::olmo3:midtrain": "AIME 2024",
-    "aime:2025::olmo3:midtrain": "AIME 2025",
+    "aime:zs_cot_r1::pass_at_32_2024_deepseek": "AIME 2024",
+    "aime:zs_cot_r1::pass_at_32_2025_deepseek": "AIME 2025",
 }
 
 DISPLAY_ORDER = ["HumanEval", "HumanEval+", "IFEval", "AIME 2024", "AIME 2025"]
+PRIMARY_SCORES = {
+    "codex_humaneval::tulu": "pass_at_1",
+    "codex_humanevalplus::tulu": "pass_at_1",
+    "aime:zs_cot_r1::pass_at_32_2024_deepseek": "pass_at_1",
+}
+
+# PRIMARY_SCORES = {
+#     "codex_humaneval::tulu": "pass_at_10",
+#     "codex_humanevalplus::tulu": "pass_at_10",
+#     "aime:zs_cot_r1::pass_at_32_2024_deepseek": "pass_at_32",
+# }
 
 
 def load_results(results_dir: Path) -> dict[str, float]:
@@ -30,7 +41,8 @@ def load_results(results_dir: Path) -> dict[str, float]:
     for f in metrics_files:
         data = json.loads(f.read_text())
         task_name = data["task_config"]["metadata"]["alias"]
-        primary = data.get("metrics", {}).get("primary_score")
+        primary_key = PRIMARY_SCORES.get(task_name, "primary_score")
+        primary = data.get("metrics", {}).get(primary_key)
         if primary is not None:
             task_scores[task_name] = primary
 
