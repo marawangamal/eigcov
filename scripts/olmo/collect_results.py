@@ -9,6 +9,8 @@ import json
 import sys
 from pathlib import Path
 
+from src.results_db import append_result, args_to_dict, make_run_hash, record_exists
+
 STANDALONE = {
     "codex_humaneval::tulu": "HumanEval",
     "codex_humanevalplus::tulu": "HumanEval+",
@@ -70,6 +72,16 @@ def parse_args():
         action="store_true",
         help="Omit code benchmarks (HumanEval, HumanEval+) from the table.",
     )
+    parser.add_argument(
+        "--log",
+        action="store_true",
+        help="Append average accuracies to results/results.jsonl.",
+    )
+    parser.add_argument(
+        "--results-db",
+        default="results-tracked/results.jsonl",
+        help="Path to the results JSONL database (default: results/results.jsonl).",
+    )
     return parser.parse_args()
 
 
@@ -100,10 +112,36 @@ def main():
 
     print("-" * len(header))
     row = f"{'Average':<15}"
+    averages: dict[str, float] = {}
     for m in methods:
         vals = [all_results[m][b] for b in display_order if b in all_results[m]]
-        row += f"{sum(vals)/len(vals):{col_w}.3f}" if vals else f"{'—':>{col_w}}"
+        if vals:
+            averages[m] = sum(vals) / len(vals)
+            row += f"{averages[m]:{col_w}.3f}"
+        else:
+            row += f"{'—':>{col_w}}"
     print(row)
+
+    if args.log and averages:
+        _HASH_IGNORE = {"log", "no_code", "results_db"}
+        logged = 0
+        for method, avg in averages.items():
+            args.merge_func = method
+            run_hash = make_run_hash("collect_results_olmo", args, ignore=_HASH_IGNORE)
+            if record_exists(args.results_db, run_hash):
+                print(f"Skipping {method}: already logged")
+                continue
+            record = {
+                "script": "collect_results_olmo",
+                "model": "Olmo-3-7B",
+                "merge_func": method,
+                **args_to_dict(args),
+                "avg_accuracy": avg,
+                **{f"test_{k}": v for k, v in all_results[method].items()},
+            }
+            append_result(args.results_db, record, run_hash)
+            logged += 1
+        print(f"\nLogged {logged} result(s) to {args.results_db}")
 
 
 if __name__ == "__main__":
