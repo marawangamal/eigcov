@@ -1,6 +1,6 @@
-# rl Experiments (Llama-3.1-8B)
+# Olmo Experiments 
 
-Merge 5 capability-specialized LoRA fine-tunes and evaluate on BBH-CoT, HumanEval(+), DROP, GSM8K, IFEval, MATH, PopQA.
+Merge 3 RL-Zero finetuned experts
 
 ## Setup
 
