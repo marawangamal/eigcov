@@ -154,6 +154,7 @@ def main():
                 **args_to_dict(args),
                 "script": "collect_results_olmo",
                 "model": "Olmo-3-7B",
+                "finetuning_mode": "standard",
             }
 
             # Add prefixed scores for each config
