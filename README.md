@@ -269,6 +269,7 @@ ifeval::tulu popqa::tulu "bbh:cot-v1::tulu" \
 
 
 
+#  97/3280 [06:27<3:03:59,  3.47s/it]
 olmes \
   --model mremila/pmahdavi-Llama-3.1-8B-mix-eigcov_gd-eigcov_down_proj_gate_proj_up_proj \
   --task  codex_humaneval::tulu codex_humanevalplus::tulu \
@@ -276,9 +277,21 @@ olmes \
   ifeval::tulu popqa::tulu "bbh:cot-v1::tulu" \
   --output-dir results-nlg-mix-eigcov_gd-eigcov_down_proj_gate_proj_up_proj \
   --gpus 1 \
+  --batch-size 128 \
   --model-type vllm  \
   --model-args '{"gpu_memory_utilization": 0.9, "trust_remote_code": false, "max_length": 4096}' 
 
+
+olmes \
+--model mremila/pmahdavi-Llama-3.1-8B-eigcov-ignore-gate_proj-up_proj \
+--model-type vllm \
+--model-args '{"gpu_memory_utilization": 0.8, "trust_remote_code": false, "max_length": 4096}' \
+--task  codex_humaneval::tulu codex_humanevalplus::tulu \
+gsm8k::tulu drop::llama3 minerva_math::tulu  \
+ifeval::tulu popqa::tulu "bbh:cot-v1::tulu" \
+--num-workers 1 \
+--batch-size 128 \
+--output-dir results-nlg-eigcov-ignore-gate_proj-up_proj
 
 
 # code only
@@ -288,7 +301,8 @@ olmes \
   --output-dir results-nlg-mremila-Llama-3.1-8B-coding \
   --gpus 4 \
   --model-type vllm  \
-  --model-args '{"gpu_memory_utilization": 0.9, "trust_remote_code": false, "max_length": 4096}' 
+  --batch-size 256 \
+  --model-args '{"gpu_memory_utilization": 0.8, "trust_remote_code": false, "max_length": 4096}' 
 ```
 <!-- 113/3280 [30:57<23:38:53, 26.88s/it] w/ 1 gpu -->
 <!-- codex_humanevalplus::tulu -->
