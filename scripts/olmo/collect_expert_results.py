@@ -127,39 +127,61 @@ def print_table(all_results: dict[str, dict[str, float]], label: str):
 def main():
     args = parse_args()
 
-    # Reverse lookup: display_name -> task_name
-    display_to_task = {v: k for k, v in STANDALONE.items()}
-
-    # Build nested dict: {display_name: {metric_key: score}}
-    expert_scores: dict[str, dict[str, float]] = {}
-
-    for d in args.dirs:
-        p = Path(d)
-        expert_type = p.name.rsplit("-", 1)[-1]
-        benchmarks = EXPERT_BENCHMARKS.get(expert_type)
-        if benchmarks is None:
-            print(
-                f"Warning: unknown expert type '{expert_type}' from {p.name}",
-                file=sys.stderr,
-            )
-            continue
-
-        # Collect primary_score
-        primary = load_results(p, {})
-        for bench in benchmarks:
-            if bench in primary:
-                expert_scores.setdefault(bench, {})["primary_score"] = primary[bench]
-
-        # Collect each pass_at_N metric
-        for _suffix, primary_scores in SCORE_CONFIGS.items():
+    # Collect scores for each config (pass@1, pass@k)
+    # results_by_config[suffix]["expert"] = {benchmark: score}
+    results_by_config: dict[str, dict[str, dict[str, float]]] = {}
+    for suffix, primary_scores in SCORE_CONFIGS.items():
+        expert: dict[str, float] = {}
+        for d in args.dirs:
+            p = Path(d)
+            expert_type = p.name.rsplit("-", 1)[-1]
+            benchmarks = EXPERT_BENCHMARKS.get(expert_type)
+            if benchmarks is None:
+                print(
+                    f"Warning: unknown expert type '{expert_type}' from {p.name}",
+                    file=sys.stderr,
+                )
+                continue
             scores = load_results(p, primary_scores)
             for bench in benchmarks:
                 if bench in scores:
-                    task_name = display_to_task[bench]
-                    metric_key = primary_scores.get(task_name, "primary_score")
-                    expert_scores.setdefault(bench, {})[metric_key] = scores[bench]
+                    expert[bench] = scores[bench]
+        results_by_config[suffix] = {"expert": expert}
 
-    print(expert_scores)
+    # Print tables and collect averages per config
+    averages_by_config: dict[str, dict[str, float]] = {}
+    for suffix, results in results_by_config.items():
+        averages_by_config[suffix] = print_table(results, f"pass{suffix}")
+
+    if args.log:
+        _HASH_IGNORE = {"log", "no_code", "results_db"}
+        args.merge_func = "expert"
+        run_hash = make_run_hash("collect_results_olmo", args, ignore=_HASH_IGNORE)
+        if record_exists(args.results_db, run_hash):
+            print("Skipping expert: already logged")
+            return
+
+        record = {
+            **args_to_dict(args),
+            "script": "collect_results_olmo",
+            "model": "Olmo-3-7B",
+            "finetuning_mode": "standard",
+        }
+
+        # Add prefixed scores for each config
+        for suffix, results in results_by_config.items():
+            for bench, score in results["expert"].items():
+                record[f"test_{bench}{suffix}"] = score
+            avg = averages_by_config[suffix].get("expert")
+            if avg is not None:
+                record[f"avg_accuracy{suffix}"] = avg
+
+        # test_avg_top1 = avg_accuracy@1 for compatibility with make_table.py
+        if "@1" in averages_by_config and "expert" in averages_by_config["@1"]:
+            record["test_avg_top1"] = averages_by_config["@1"]["expert"]
+        print("Logging record with merge_func:", record["merge_func"])
+        append_result(args.results_db, record, run_hash)
+        print(f"\nLogged 1 result(s) to {args.results_db}")
 
 
 if __name__ == "__main__":
