@@ -34,21 +34,24 @@ bash scripts/olmo/eval_task_addition.sh \
 
 ## Evaluate experts
 ```sh
-MODEL_ID=allenai/Olmo-3-7B-RL-Zero-Math
+MODEL_ID=allenai/Olmo-3-1025-7B
   olmes \
     --model $MODEL_ID \
     --task \
       codex_humaneval::tulu \
       codex_humanevalplus::tulu \
       ifeval::tulu \
-      aime:zs_cot_r1::pass_at_32_2024_deepseek \
-      aime:zs_cot_r1::pass_at_32_2025_deepseek \
     --output-dir results-rl/"$(echo $MODEL_ID | tr '/' '-')" \
     --gpus 4 \
     --model-type vllm \
-    --model-args '{"gpu_memory_utilization": 0.8, "trust_remote_code": false, "max_length": 16384}' \
+    --model-args '{"gpu_memory_utilization": 0.8, "trust_remote_code": false, "max_length": 4096, "tokenizer": "allenai/Olmo-3-7B-RL-Zero-Math"}' \
     --batch-size 128
+
+# aime:zs_cot_r1::pass_at_32_2024_deepseek \
+# aime:zs_cot_r1::pass_at_32_2025_deepseek \
 ```
+
+
 
 ## Collect results
 ```sh
