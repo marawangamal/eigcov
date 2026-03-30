@@ -46,7 +46,7 @@ bash scripts/olmo/eval_task_addition.sh \
     allenai/Olmo-3-7B-RL-Zero-Math \
     allenai/Olmo-3-7B-RL-Zero-Code \
     allenai/Olmo-3-7B-RL-Zero-IF \
-  --merge-funcs "regmean" \
+  --merge-funcs "sum04" \
   --gpus 4
 ```
 

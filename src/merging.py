@@ -110,6 +110,11 @@ def merge_sum(taus: torch.Tensor, **kwargs) -> torch.Tensor:
     return taus.sum(dim=0)
 
 
+def merge_sum04(taus: torch.Tensor, **kwargs) -> torch.Tensor:
+    # Shape: (N, Do, Di) -> (Do, Di)
+    return taus.sum(dim=0) * 0.4
+
+
 def merge_mean(taus: torch.Tensor, **kwargs) -> torch.Tensor:
     return taus.mean(dim=0)
 

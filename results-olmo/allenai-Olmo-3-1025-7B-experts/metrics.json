@@ -1,0 +1,323 @@
+{
+  "tasks": [
+    {
+      "alias": "aime:zs_cot_r1::pass_at_32_2024_deepseek",
+      "metrics": {
+        "exact_match": 0.0,
+        "exact_match_sub_2024": 0.0,
+        "exact_match_flex": 0.36666666666666664,
+        "exact_match_flex_sub_2024": 0.36666666666666664,
+        "pass_at_1": 0.38229166666666664,
+        "pass_at_4": 0.5806331108639229,
+        "pass_at_8": 0.6537465528333158,
+        "pass_at_16": 0.7173621791254909,
+        "pass_at_32": 0.7666666666666667,
+        "primary_score": 0.38229166666666664
+      },
+      "num_instances": 30,
+      "processing_time": 64.74867248535156,
+      "task_config": {
+        "task_name": "aime",
+        "task_core": "aime",
+        "split": "test",
+        "primary_metric": "pass_at_1",
+        "generation_kwargs": {
+          "max_gen_toks": 16384,
+          "temperature": 0.6,
+          "truncate_context": false,
+          "do_sample": true,
+          "stop_sequences": [],
+          "top_p": 0.95,
+          "repeats": 32
+        },
+        "metric_kwargs": {
+          "maj_at_ks": [],
+          "pass_at_ks": [
+            1,
+            4,
+            8,
+            16,
+            32
+          ]
+        },
+        "native_id_field": "index",
+        "dataset_path": "allenai/aime-2021-2025",
+        "use_chat_format": true,
+        "version": 0,
+        "metadata": {
+          "years": [
+            2024
+          ],
+          "regimes": [
+            "hamish_zs_reasoning"
+          ],
+          "alias": "aime:zs_cot_r1::pass_at_32_2024_deepseek"
+        }
+      }
+    },
+    {
+      "alias": "aime:zs_cot_r1::pass_at_32_2025_deepseek",
+      "metrics": {
+        "exact_match": 0.0,
+        "exact_match_sub_2025": 0.0,
+        "exact_match_flex": 0.26666666666666666,
+        "exact_match_flex_sub_2025": 0.26666666666666666,
+        "pass_at_1": 0.3072916666666667,
+        "pass_at_4": 0.4656646273637375,
+        "pass_at_8": 0.5274475216210477,
+        "pass_at_16": 0.5894802060780366,
+        "pass_at_32": 0.6666666666666666,
+        "primary_score": 0.3072916666666667
+      },
+      "num_instances": 30,
+      "processing_time": 105.44505023956299,
+      "task_config": {
+        "task_name": "aime",
+        "task_core": "aime",
+        "split": "test",
+        "primary_metric": "pass_at_1",
+        "generation_kwargs": {
+          "max_gen_toks": 16384,
+          "temperature": 0.6,
+          "truncate_context": false,
+          "do_sample": true,
+          "stop_sequences": [],
+          "top_p": 0.95,
+          "repeats": 32
+        },
+        "metric_kwargs": {
+          "maj_at_ks": [],
+          "pass_at_ks": [
+            1,
+            4,
+            8,
+            16,
+            32
+          ]
+        },
+        "native_id_field": "index",
+        "dataset_path": "allenai/aime-2021-2025",
+        "use_chat_format": true,
+        "version": 0,
+        "metadata": {
+          "years": [
+            2025
+          ],
+          "regimes": [
+            "hamish_zs_reasoning"
+          ],
+          "alias": "aime:zs_cot_r1::pass_at_32_2025_deepseek"
+        }
+      }
+    },
+    {
+      "alias": "codex_humaneval::tulu",
+      "metrics": {
+        "pass_at_1": 0.6198170731707315,
+        "pass_at_10": 0.853189460430078,
+        "primary_score": 0.853189460430078,
+        "extra_metrics": {
+          "num_tokens": 105.93963414634146
+        }
+      },
+      "num_instances": 164,
+      "processing_time": 161.71185946464539,
+      "task_config": {
+        "task_name": "codex_humaneval",
+        "task_core": "codex_humaneval",
+        "split": "test",
+        "primary_metric": "pass_at_10",
+        "context_kwargs": {
+          "answer_prefix": "Here is the completed function:\n\n```python\n",
+          "assistant_prefix": "Here is the completed function:\n\n```python\n"
+        },
+        "generation_kwargs": {
+          "max_gen_toks": 999999,
+          "do_sample": true,
+          "temperature": 0.8,
+          "stop_sequences": [
+            "\nclass",
+            "\nif",
+            "\nprint",
+            "\n#",
+            "\n```",
+            "\n```\n\n",
+            "<|eot_id|>"
+          ],
+          "repeats": 20,
+          "truncate_context": false,
+          "top_p": 0.95
+        },
+        "metric_kwargs": {
+          "pass_at_ks": [
+            1,
+            10
+          ]
+        },
+        "native_id_field": "task_id",
+        "dataset_path": "openai/openai_humaneval",
+        "use_chat_format": true,
+        "version": 0.1,
+        "metadata": {
+          "regimes": [
+            "Tulu"
+          ],
+          "alias": "codex_humaneval::tulu"
+        }
+      }
+    },
+    {
+      "alias": "codex_humanevalplus::tulu",
+      "metrics": {
+        "pass_at_1": 0.5704268292682926,
+        "pass_at_10": 0.8465990939137126,
+        "primary_score": 0.8465990939137126,
+        "extra_metrics": {
+          "num_tokens": 110.12865853658536
+        }
+      },
+      "num_instances": 164,
+      "processing_time": 322.1992664337158,
+      "task_config": {
+        "task_name": "codex_humanevalplus",
+        "task_core": "codex_humanevalplus",
+        "split": "test",
+        "primary_metric": "pass_at_10",
+        "context_kwargs": {
+          "answer_prefix": "Here is the completed function:\n\n```python\n",
+          "assistant_prefix": "Here is the completed function:\n\n```python\n"
+        },
+        "generation_kwargs": {
+          "max_gen_toks": 999999,
+          "do_sample": true,
+          "temperature": 0.8,
+          "stop_sequences": [
+            "\nclass",
+            "\nif",
+            "\nprint",
+            "\n#",
+            "\n```",
+            "\n```\n\n",
+            "<|eot_id|>"
+          ],
+          "repeats": 20,
+          "truncate_context": false,
+          "top_p": 0.95
+        },
+        "metric_kwargs": {
+          "pass_at_ks": [
+            1,
+            10
+          ],
+          "timeout": 20.0
+        },
+        "native_id_field": "task_id",
+        "dataset_path": "evalplus/humanevalplus",
+        "use_chat_format": true,
+        "version": 0.1,
+        "metadata": {
+          "regimes": [
+            "Tulu"
+          ],
+          "alias": "codex_humanevalplus::tulu"
+        }
+      }
+    },
+    {
+      "alias": "ifeval::tulu",
+      "metrics": {
+        "prompt_level_strict_acc": 0.7966728280961183,
+        "inst_level_strict_acc": 0.8609112709832134,
+        "punctuation:no_comma_strict_acc": 0.9848484848484849,
+        "detectable_format:number_highlighted_sections_strict_acc": 0.9166666666666666,
+        "length_constraints:number_words_strict_acc": 0.40384615384615385,
+        "prompt_level_loose_acc": 0.8243992606284658,
+        "inst_level_loose_acc": 0.8800959232613909,
+        "punctuation:no_comma_loose_acc": 0.9848484848484849,
+        "detectable_format:number_highlighted_sections_loose_acc": 0.9166666666666666,
+        "length_constraints:number_words_loose_acc": 0.40384615384615385,
+        "detectable_content:number_placeholders_strict_acc": 0.9259259259259259,
+        "detectable_content:number_placeholders_loose_acc": 0.9259259259259259,
+        "combination:repeat_prompt_strict_acc": 0.7073170731707317,
+        "detectable_format:title_strict_acc": 0.972972972972973,
+        "combination:repeat_prompt_loose_acc": 0.7073170731707317,
+        "detectable_format:title_loose_acc": 0.972972972972973,
+        "change_case:english_lowercase_strict_acc": 0.9230769230769231,
+        "change_case:english_lowercase_loose_acc": 0.9230769230769231,
+        "detectable_format:number_bullet_lists_strict_acc": 0.967741935483871,
+        "detectable_format:number_bullet_lists_loose_acc": 0.967741935483871,
+        "change_case:english_capital_strict_acc": 1.0,
+        "detectable_format:multiple_sections_strict_acc": 0.9285714285714286,
+        "change_case:english_capital_loose_acc": 1.0,
+        "detectable_format:multiple_sections_loose_acc": 0.9285714285714286,
+        "change_case:capital_word_frequency_strict_acc": 0.84,
+        "startend:quotation_strict_acc": 0.975609756097561,
+        "change_case:capital_word_frequency_loose_acc": 0.84,
+        "startend:quotation_loose_acc": 0.975609756097561,
+        "keywords:existence_strict_acc": 0.9487179487179487,
+        "keywords:existence_loose_acc": 0.9487179487179487,
+        "detectable_format:json_format_strict_acc": 0.9411764705882353,
+        "detectable_format:json_format_loose_acc": 0.9411764705882353,
+        "length_constraints:number_paragraphs_strict_acc": 0.7037037037037037,
+        "length_constraints:number_paragraphs_loose_acc": 0.7777777777777778,
+        "combination:two_responses_strict_acc": 0.875,
+        "combination:two_responses_loose_acc": 0.9583333333333334,
+        "language:response_language_strict_acc": 0.9032258064516129,
+        "language:response_language_loose_acc": 0.9032258064516129,
+        "keywords:letter_frequency_strict_acc": 0.8484848484848485,
+        "keywords:letter_frequency_loose_acc": 0.8787878787878788,
+        "startend:end_checker_strict_acc": 0.9615384615384616,
+        "startend:end_checker_loose_acc": 0.9615384615384616,
+        "keywords:forbidden_words_strict_acc": 0.9591836734693877,
+        "keywords:forbidden_words_loose_acc": 0.9591836734693877,
+        "keywords:frequency_strict_acc": 0.9047619047619048,
+        "keywords:frequency_loose_acc": 0.9047619047619048,
+        "length_constraints:number_sentences_strict_acc": 0.7307692307692307,
+        "length_constraints:number_sentences_loose_acc": 0.7307692307692307,
+        "detectable_content:postscript_strict_acc": 1.0,
+        "detectable_content:postscript_loose_acc": 1.0,
+        "length_constraints:nth_paragraph_first_word_strict_acc": 0.0,
+        "length_constraints:nth_paragraph_first_word_loose_acc": 0.9166666666666666,
+        "detectable_format:constrained_response_strict_acc": 1.0,
+        "detectable_format:constrained_response_loose_acc": 1.0,
+        "primary_score": 0.8243992606284658
+      },
+      "num_instances": 541,
+      "processing_time": 4.769463777542114,
+      "task_config": {
+        "task_name": "ifeval",
+        "task_core": "ifeval",
+        "split": "train",
+        "primary_metric": "prompt_level_loose_acc",
+        "generation_kwargs": {
+          "max_gen_toks": 2048,
+          "do_sample": false,
+          "temperature": 0.0,
+          "stop_sequences": [],
+          "truncate_context": false
+        },
+        "metric_kwargs": {
+          "aggregation_levels": [
+            "prompt",
+            "inst"
+          ],
+          "strictness_levels": [
+            "strict",
+            "loose"
+          ],
+          "output_individual_metrics": true
+        },
+        "native_id_field": "key",
+        "dataset_path": "HuggingFaceH4/ifeval",
+        "use_chat_format": true,
+        "version": 0.1,
+        "metadata": {
+          "regimes": [
+            "Tulu"
+          ],
+          "alias": "ifeval::tulu"
+        }
+      }
+    }
+  ]
+}

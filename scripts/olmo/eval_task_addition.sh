@@ -39,7 +39,8 @@ OLMES_TASKS=(
   "aime:zs_cot_r1::pass_at_32_2024_deepseek"
   "aime:zs_cot_r1::pass_at_32_2025_deepseek"
 )
-OLMES_MODEL_ARGS='{"gpu_memory_utilization": 0.8, "trust_remote_code": false, "max_length": 16384}'
+OLMES_MODEL_ARGS='{"gpu_memory_utilization": 0.8, "trust_remote_code": false, "max_length": 16384}' # for aime
+# OLMES_MODEL_ARGS='{"gpu_memory_utilization": 0.8, "trust_remote_code": false, "max_length": 4096}'  # otherwise
 
 # ── Argument parsing ──────────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
