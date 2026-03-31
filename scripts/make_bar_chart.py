@@ -4,17 +4,17 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
-# ── 1. Configuration (36pt "Billboard" Style) ──────────────────────────
-BASE_FONTSIZE = 36
+# ── 1. Configuration (Restored from previous context) ───────────────────
+BASE_FONTSIZE = 36  # As requested for high-res visibility
 sns.set_theme(
     style="ticks",
     rc={
         "font.size": BASE_FONTSIZE,
         "axes.titlesize": BASE_FONTSIZE,
         "axes.labelsize": BASE_FONTSIZE,
-        "xtick.labelsize": BASE_FONTSIZE * 0.85,
-        "ytick.labelsize": BASE_FONTSIZE * 0.85,
-        "legend.fontsize": BASE_FONTSIZE * 0.75,
+        "xtick.labelsize": BASE_FONTSIZE * 0.9,
+        "ytick.labelsize": BASE_FONTSIZE * 0.9,
+        "legend.fontsize": BASE_FONTSIZE,
         "axes.spines.top": False,
         "axes.spines.right": False,
         "hatch.linewidth": 2.5,
@@ -43,6 +43,52 @@ KNOTS_MAP = {"KNOTS-TSV": "TSV", "KNOTS-ISO-C": "ISO-C"}
 DATA_NEEDING = ["TA", "RegMean", "KNOTS-TSV", "KNOTS-ISO-C"]
 TEXTURE_SLASH = "//"
 TEXTURE_DOT = ".."
+
+# ── 2. Data Loading (Assuming standard format) ─────────────────────────
+# Re-including the processing logic to ensure 'df' and 'METHODS' map exist
+METHODS_MAP = {
+    "sum_data": "TA",
+    "regmean": "RegMean",
+    "mean": "Average",
+    "isoc": "ISO-C",
+    "isoc_mean": "ISO-C",
+    "tsv": "TSV",
+    "eigcov": "EigenCov",
+    "knots_tsv": "KNOTS-TSV",
+    "knots_isoc_mean": "KNOTS-ISO-C",
+    "expert": "Expert",
+    "zeroshot": "Zeroshot",
+}
+
+
+def load_data():
+    paths = [
+        "results-tracked/results.jsonl",
+        "results-tracked/results-anc.jsonl",
+        "results-tracked/results-ta.jsonl",
+    ]
+    all_data = []
+    for p in paths:
+        if osp.exists(p):
+            with open(p) as f:
+                all_data.extend([json.loads(l) for l in f if l.strip()])
+
+    mapping = {k: v for d in MODELS.values() for k, v in d.items()}
+    return (
+        pd.DataFrame(all_data)
+        .assign(
+            Model=lambda d: d["model"].map(mapping),
+            Method=lambda d: d["merge_func"].map(METHODS_MAP),
+            Score=lambda d: d.get("test_avg_topk", d["test_avg_top1"]).fillna(
+                d["test_avg_top1"]
+            )
+            * 100,
+        )
+        .dropna(subset=["Model", "Method"])
+    )
+
+
+df = load_data()
 
 # ── 2. Plotting Logic (2x2 Grid) ───────────────────────────────────────
 fig, axes = plt.subplots(2, 2, figsize=(32, 24))
@@ -168,5 +214,5 @@ fig.legend(
 plt.tight_layout()
 # Adjust bottom to make room for the massive legend
 plt.subplots_adjust(bottom=0.15, hspace=0.3, wspace=0.2)
-plt.savefig("../results-tracked/performance-grid.pdf", dpi=300, bbox_inches="tight")
+plt.savefig("results-tracked/performance-grid.pdf", dpi=300, bbox_inches="tight")
 plt.show()
