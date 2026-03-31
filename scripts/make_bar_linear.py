@@ -1,46 +1,53 @@
 import json, os.path as osp
 import matplotlib.pyplot as plt
+import matplotlib
+import matplotlib.colors as mcolors
 import numpy as np
 import pandas as pd
 import seaborn as sns
 
-# ── 1. Configuration (Restored from previous context) ───────────────────
-BASE_FONTSIZE = 36  # As requested for high-res visibility
-sns.set_theme(
-    style="ticks",
-    rc={
-        "font.size": BASE_FONTSIZE,
-        "axes.titlesize": BASE_FONTSIZE,
-        "axes.labelsize": BASE_FONTSIZE,
-        "xtick.labelsize": BASE_FONTSIZE * 0.9,
-        "ytick.labelsize": BASE_FONTSIZE * 0.9,
-        "legend.fontsize": BASE_FONTSIZE,
-        "axes.spines.top": False,
-        "axes.spines.right": False,
-        "hatch.linewidth": 2.5,
-        "hatch.color": "#333333",
-    },
-)
+# ── Font Setup ──────────────────────────────────────────────────────────
+sns.set_style("white")
+sns.set_style("ticks")
+sns.set_context("notebook", font_scale=1.75)
+
+try:
+    import urllib.request
+    import zipfile
+    urllib.request.urlretrieve(
+        'https://github.com/rsms/inter/releases/download/v3.19/Inter-3.19.zip',
+        'Inter-3.19.zip'
+    )
+    with zipfile.ZipFile('Inter-3.19.zip', 'r') as zip_ref:
+        zip_ref.extractall()
+    matplotlib.font_manager.fontManager.addfont('Inter Variable/Inter.ttf')
+    matplotlib.rcParams.update({"font.family": "Inter"})
+except:
+    pass  # Fallback to default if Inter font unavailable
+
+# ── 1. Configuration ────────────────────────────────────────────────────
+BASE_FONTSIZE = 12  # Display-friendly size
 
 MODELS = {
     "Language": {"t5-base": "T5-Base", "t5-large": "T5-Large"},
     "Vision": {"ViT-B-16": "ViT-B/16", "ViT-B-32": "ViT-B/32", "ViT-L-14": "ViT-L/14"},
 }
 
+# Vibrant but controlled palette so methods are distinct without feeling loud.
 COLORS = {
-    "EigenCov": "#00A658",
-    "TSV": "#4A5568",
-    "KNOTS-TSV": "#4A5568",
-    "ISO-C": "#718096",
-    "KNOTS-ISO-C": "#718096",
-    "Average": "#A0AEC0",
-    "RegMean": "#CBD5E0",
-    "TA": "#E2E8F0",
+    "TA": "#5B8FF9",
+    "RegMean": "#61DDAA",
+    "Average": "#9C88FF",
+    "ISO-C": "#F6BD16",
+    "TSV": "#5D7092",
+    "ACTMat": "#E8684A",
+    "KNOTS-ISO-C": "#FF9D4D",
+    "KNOTS-TSV": "#6DC8EC",
 }
 
-BAR_ORDER = ["TA", "RegMean", "Average", "ISO-C", "TSV", "EigenCov"]
+BAR_ORDER = ["TA", "RegMean", "Average", "ISO-C", "KNOTS-ISO-C", "TSV", "KNOTS-TSV", "ACTMat"]
 KNOTS_MAP = {"KNOTS-TSV": "TSV", "KNOTS-ISO-C": "ISO-C"}
-DATA_NEEDING = ["TA", "RegMean", "KNOTS-TSV", "KNOTS-ISO-C"]
+DATA_NEEDING = ["TA", "RegMean"]
 TEXTURE_SLASH = "//"
 TEXTURE_DOT = ".."
 
@@ -53,7 +60,7 @@ METHODS_MAP = {
     "isoc": "ISO-C",
     "isoc_mean": "ISO-C",
     "tsv": "TSV",
-    "eigcov": "EigenCov",
+    "eigcov": "ACTMat",
     "knots_tsv": "KNOTS-TSV",
     "knots_isoc_mean": "KNOTS-ISO-C",
     "expert": "Expert",
@@ -90,68 +97,56 @@ def load_data():
 
 df = load_data()
 
-# ── 2. Plotting Logic (2x2 Grid) ───────────────────────────────────────
-fig, axes = plt.subplots(2, 2, figsize=(32, 24))
+# ── 2. Plotting Logic (1x4 Grid) ───────────────────────────────────────
+fig, axes = plt.subplots(1, 4, figsize=(24, 5.5))
 legend_data = {}
 
-# Grid Structure:
-# Row 0: Language (Std, LoRA)
-# Row 1: Vision (Std, LoRA)
 grid_config = [
-    (0, 0, "standard", "Language"),
-    (0, 1, "lora", "Language"),
-    (1, 0, "standard", "Vision"),
-    (1, 1, "lora", "Vision"),
+    ("standard", "Language"),
+    ("lora", "Language"),
+    ("standard", "Vision"),
+    ("lora", "Vision"),
 ]
 
-for r, c, mode, dom in grid_config:
-    ax = axes[r, c]
+for idx, (mode, dom) in enumerate(grid_config):
+    ax = axes[idx]
     models = list(MODELS[dom].values())
     sub = df[df["finetuning_mode"] == mode]
     tbl = sub.groupby(["Method", "Model"])["Score"].max().unstack("Model")
 
-    x, bw = np.arange(len(models)), 0.14
-    gw = len(BAR_ORDER) * bw
+    x = np.arange(len(models)) if mode == "lora" else np.arange(len(models)) * 1.25
+    # Standard uses extra spacing between methods; LoRA stays tighter to fit more bars.
+    bw = 0.09 if mode == "lora" else 0.13
+    group_step = bw if mode == "lora" else bw * 1.12
 
-    for j, m in enumerate(BAR_ORDER):
+    # Filter bar order based on mode and center each series in the group.
+    bar_order_filtered = (
+        BAR_ORDER if mode == "lora" else [m for m in BAR_ORDER if not m.startswith("KNOTS")]
+    )
+    offsets = (
+        np.arange(len(bar_order_filtered)) - (len(bar_order_filtered) - 1) / 2
+    ) * group_step
+    gw = len(bar_order_filtered) * group_step
+
+    for j, m in enumerate(bar_order_filtered):
         if m not in tbl.index:
             continue
         vals = [tbl.loc[m, mod] if mod in tbl.columns else 0 for mod in models]
 
-        hatch = TEXTURE_SLASH if m in DATA_NEEDING else None
         rects = ax.bar(
-            x - gw / 2 + (j + 0.5) * bw,
+            x + offsets[j],
             vals,
             width=bw,
             color=COLORS.get(m),
             edgecolor="white",
             linewidth=1.5,
-            hatch=hatch,
+            hatch=TEXTURE_SLASH if m in DATA_NEEDING else None,
+            alpha=1.0 if m == "ACTMat" else 0.6,
             zorder=3,
         )
 
         # Capture legend handles
         legend_data[m] = rects
-
-        # Handle KNOTS Gains (LoRA columns only)
-        knots_key = next((k for k, v in KNOTS_MAP.items() if v == m), None)
-        if mode == "lora" and knots_key in tbl.index:
-            k_vals = [
-                tbl.loc[knots_key, mod] if mod in tbl.columns else 0 for mod in models
-            ]
-            gains = [max(k - b, 0) for k, b in zip(k_vals, vals)]
-
-            k_rects = ax.bar(
-                x - gw / 2 + (j + 0.5) * bw,
-                gains,
-                bottom=vals,
-                width=bw,
-                color=COLORS.get(m),
-                edgecolor="white",
-                hatch=TEXTURE_DOT,
-                zorder=4,
-            )
-            legend_data[knots_key] = k_rects
 
     # ── Honest Scaling (45-85 for Lang, 45-95 for Vis) ──
     ymin, ymax = (45, 85) if dom == "Language" else (45, 95)
@@ -164,8 +159,8 @@ for r, c, mode, dom in grid_config:
                 if mod in tbl.columns:
                     line = ax.hlines(
                         tbl.loc[bl, mod],
-                        k - gw / 2 - 0.05,
-                        k + gw / 2 + 0.05,
+                        x[k] - gw / 2 - 0.05,
+                        x[k] + gw / 2 + 0.05,
                         colors="black" if bl == "Expert" else "gray",
                         linestyles=style,
                         lw=3.5,
@@ -174,14 +169,15 @@ for r, c, mode, dom in grid_config:
                     legend_data[bl] = line
 
     # Formatting
-    title_mode = "Standard" if mode == "standard" else "LoRA"
-    ax.set_title(f"{dom} ({title_mode})", fontweight="bold", pad=30)
+    title_mode = "Full-Model Fine-Tuning" if mode == "standard" else "LoRA"
+    ax.set_title(f"{dom} ({title_mode})", fontweight="bold", pad=15)
     ax.set_xticks(x)
     ax.set_xticklabels(models, fontweight="bold")
+    ax.tick_params(axis="x", pad=10)
     ax.yaxis.grid(True, alpha=0.3, ls="--")
 
     # Y-label only on the left-most plots
-    if c == 0:
+    if idx == 0:
         ax.set_ylabel("Accuracy (%)", fontweight="bold", labelpad=20)
 
 # ── 3. Global Legend & Export ──────────────────────────────────────────
@@ -195,24 +191,40 @@ order = [
     "KNOTS-ISO-C",
     "TSV",
     "KNOTS-TSV",
-    "EigenCov",
+    "ACTMat",
 ]
 legend_data["Expert"] = plt.Line2D([0], [0], color="black", ls="--", lw=3.5)
 legend_data["Zeroshot"] = plt.Line2D([0], [0], color="gray", ls=":", lw=3.5)
 
 final_handles = [legend_data[m] for m in order if m in legend_data]
-fig.legend(
+
+plt.tight_layout()
+# Adjust spacing to prevent title/label overlap
+plt.subplots_adjust(bottom=0.27, top=0.88, wspace=0.3)
+
+note_ax = fig.add_axes([0.04, 0.0, 0.28, 0.18])
+note_ax.axis("off")
+note_ax.text(
+    0.0,
+    0.5,
+    "Hatched bars indicate methods that depend on training data.",
+    ha="left",
+    va="center",
+    fontsize=20,
+    color="#4A5568",
+)
+
+legend_ax = fig.add_axes([0.34, 0.0, 0.62, 0.18])
+legend_ax.axis("off")
+legend_ax.legend(
     final_handles,
     [m for m in order if m in legend_data],
-    loc="lower center",
-    bbox_to_anchor=(0.5, 0.04),
+    loc="center",
     ncol=5,
     frameon=False,
     columnspacing=1.5,
 )
 
-plt.tight_layout()
-# Adjust bottom to make room for the massive legend
-plt.subplots_adjust(bottom=0.15, hspace=0.3, wspace=0.2)
+sns.despine()
 plt.savefig("results-tracked/performance-grid.pdf", dpi=300, bbox_inches="tight")
 plt.show()
