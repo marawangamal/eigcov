@@ -62,9 +62,9 @@ _run_hash = (
     if args.results_db
     else None
 )
-if args.results_db and record_exists(args.results_db, _run_hash):
-    print(f"Skipping: matching record already exists in {args.results_db}")
-    exit(0)
+# if args.results_db and record_exists(args.results_db, _run_hash):
+#     print(f"Skipping: matching record already exists in {args.results_db}")
+#     exit(0)
 
 print("*" * 100)
 if args.finetuning_mode == "standard":
@@ -82,8 +82,14 @@ merge_name = getattr(args, "merge_func", "sum")
 
 for dataset in eval_datasets:
     is_fisher = merge_name == "fisher"
-    cov_path = f"{args.cov_dir}/covariance_{dataset}.npz" if args.cov_dir and not is_fisher else None
-    fisher_path = f"{args.cov_dir}/fisher_{dataset}.npz" if args.cov_dir and is_fisher else None
+    cov_path = (
+        f"{args.cov_dir}/covariance_{dataset}.npz"
+        if args.cov_dir and not is_fisher
+        else None
+    )
+    fisher_path = (
+        f"{args.cov_dir}/fisher_{dataset}.npz" if args.cov_dir and is_fisher else None
+    )
     if args.finetuning_mode == "linear":
         pretrained_checkpoint = f"{args.save}/{dataset}/linear_zeroshot.pt"
         finetuned_checkpoint = f"{args.save}/{dataset}/linear_finetuned.pt"
@@ -125,7 +131,8 @@ hp_names = list(hpo.keys())
 hp_value_lists = list(hpo.values())
 hp_combos = (
     [dict(zip(hp_names, combo)) for combo in itertools.product(*hp_value_lists)]
-    if hp_names else [{}]
+    if hp_names
+    else [{}]
 )
 merge_kwargs = hp_combos[0] if hp_combos else {}
 

@@ -27,7 +27,7 @@ BATCH_SIZE=32
 FT_MODE=standard
 
 # ── Default methods (from lang_eval.sh) ─────────────────────────────────
-DEFAULT_METHODS=(tsv eigcov isoc mean sum)
+DEFAULT_METHODS=(tsv eigcov isoc mean sum regmean)
 
 for MODEL in "${MODELS[@]}"; do
     for METHOD in "${DEFAULT_METHODS[@]}"; do
@@ -37,11 +37,10 @@ for MODEL in "${MODELS[@]}"; do
         --model="$MODEL" \
         --finetuning-mode="$FT_MODE" \
         --merge-func="$METHOD" \
-        --cov-dir="None" \
+        --cov-dir="$COV_DIR" \
         --results-db="$RESULTS_DB" \
         --hf-cache-dir="$HF_CACHE_DIR" \
-        --save="$SAVE" \
-        --cov-dir="None"
+        --save="$SAVE"
     done
 done
 
