@@ -48,61 +48,39 @@ BATCH_SIZE=32
 # Evaluate all merging methods using their default settings.
 # Results are stored in the main results database.
 MODELS=(ViT-B-16 ViT-B-32 ViT-L-14)
-METHODS=(tsv eigcov regmean)
-FT_MODES=(standard)
+METHODS=(tsv eigcov regmean isoc mean sum04)
+FT_MODE=standard
 HPO=""
 
 
 for MODEL in "${MODELS[@]}"; do
-  for FT_MODE in "${FT_MODES[@]}"; do
+  # Evaluate task addition w/ diff merge methods
+  for method in "${METHODS[@]}"; do
 
-    # Evaluate task addition w/ diff merge methods
-    for method in "${METHODS[@]}"; do
-
-      # 2a. Run covariance/fisher script if needed
-      if [ "$method" = "regmean" ]; then
-        echo "[BASH] Running covariance.py | model: $MODEL | ft mode: $FT_MODE | method: $method"
-        python scripts/vision/covariance.py \
-          --model="$MODEL" \
-          --cov-split=train \
-          --cov-num-batches="$NUM_BATCHES" \
-          --cov-batch-size="$BATCH_SIZE" \
-          --mha=split \
-          --cov-type=sm \
-          --cov-estimator=full \
-          --finetuning-mode="$FT_MODE" \
-          --openclip-cachedir="$OPENCLIP_DIR" \
-          --data-location="$DATA_DIR"
-      elif [ "$method" = "fisher" ]; then
-        echo "[BASH] Running fisher.py | model: $MODEL | ft mode: $FT_MODE | method: $method"
-        python scripts/vision/fisher.py \
-          --model="$MODEL" \
-          --cov-split=train \
-          --cov-num-batches="$NUM_BATCHES" \
-          --cov-batch-size="$BATCH_SIZE" \
-          --finetuning-mode="$FT_MODE" \
-          --openclip-cachedir="$OPENCLIP_DIR" \
-          --data-location="$DATA_DIR"
-      fi
-
-      # 2b. Evaluate task addition
-      echo "[BASH] Running eval_task_addition.py | model: $MODEL | ft mode: $FT_MODE | method: $method"
-      python scripts/vision/eval_task_addition.py \
+    # 2a. Run covariance/fisher script if needed
+    if [ "$method" = "regmean" ]; then
+      echo "[BASH] Running covariance.py | model: $MODEL | ft mode: $FT_MODE | method: $method"
+      python scripts/vision/covariance.py \
         --model="$MODEL" \
         --finetuning-mode="$FT_MODE" \
-        --data-location="$DATA_DIR" \
-        --merge-func="$method" \
-        --mha=split \
-        ${HPO:+--hpo="$HPO"}
+        --mha=split
+    elif [ "$method" = "fisher" ]; then
+      echo "[BASH] Running fisher.py | model: $MODEL | ft mode: $FT_MODE | method: $method"
+      python scripts/vision/fisher.py \
+        --model="$MODEL" \
+        --finetuning-mode="$FT_MODE"
+    fi
 
-    done
+    # 2b. Evaluate task addition
+    echo "[BASH] Running eval_task_addition.py | model: $MODEL | ft mode: $FT_MODE | method: $method"
+    python scripts/vision/eval_task_addition.py \
+      --model="$MODEL" \
+      --finetuning-mode="$FT_MODE" \
+      --data-location="$DATA_DIR" \
+      --merge-func="$method" \
+      --mha=split \
+      ${HPO:+--hpo="$HPO"}
+
   done
 done
 
-
-# python scripts/vision/eval_task_addition.py \
-# --model="ViT-B-16" \
-# --finetuning-mode="standard" \
-# --data-location="$SLURM_TMPDIR/datasets" \
-# --merge-func="eigcov" \
-# --mha=split 
