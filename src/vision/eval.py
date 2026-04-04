@@ -57,10 +57,11 @@ def evaluate(image_encoder, args):
     if args.eval_datasets is None:
         return
     per_dataset_results = {}
+    control = getattr(args, "control_dataset", None)
     eval_datasets = (
         args.eval_datasets
-        if args.control_dataset is None
-        else args.eval_datasets + [args.control_dataset]
+        if control is None
+        else args.eval_datasets + [control]
     )
     for dataset_name in eval_datasets:
         print("Evaluating on", dataset_name)
