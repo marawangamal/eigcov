@@ -1,6 +1,7 @@
 import itertools
 import json
 import os
+from pathlib import Path
 
 from src.language.args import parse_arguments
 from src.language.eval import evaluate_task_vector_at_coef
@@ -9,7 +10,6 @@ from src.language.task_vectors import (
     LanguageNonLinearTaskVector,
 )
 from src.merging import combine_task_vectors
-from src.results_db import append_result, args_to_dict, make_run_hash, record_exists
 
 T5_DATASETS = ["qasc", "wiki_qa", "quartz", "paws", "story_cloze", "winogrande", "wsc"]
 
@@ -19,51 +19,10 @@ if args.seed is not None:
 else:
     args.save = f"checkpoints/{args.model}"
 
-_HASH_IGNORE = {
-    # training-only
-    "lr",
-    "wd",
-    "ls",
-    "warmup_length",
-    "epochs",
-    "num_grad_accumulation",
-    "batch_size",
-    "checkpoint_every",
-    "keep_checkpoints",
-    "port",
-    "world_size",
-    "cosine_samples",
-    "lora_rank",
-    "lora_alpha",
-    "lora_dropout",
-    "lora_target_modules",
-    "lora_target_parameters",
-    # environment / paths
-    "hf_cache_dir",
-    "cache_dir",
-    "save",
-    "data_location",
-    # dynamically set after hash
-    "eval_datasets",
-    "finetuning_accuracies",
-    "control_dataset",
-    "eval_split",
-    "eval_max_batches",
-    # metadata
-    "results_db",
-    "exp_name",
-    "overwrite",
-    "num_workers",
-    "device",
-}
-
-_run_hash = (
-    make_run_hash("eval_task_addition", args, ignore=_HASH_IGNORE)
-    if args.results_db
-    else None
-)
-if args.results_db and record_exists(args.results_db, _run_hash):
-    print(f"Skipping: matching record already exists in {args.results_db}")
+merge_name = getattr(args, "merge_func", "sum")
+results_file = Path(f"results/{args.model}-{merge_name}/metrics.json")
+if results_file.exists() and not args.overwrite:
+    print(f"Skipping: {results_file} already exists (use --overwrite to rerun)")
     exit(0)
 
 print("*" * 100)
@@ -88,18 +47,13 @@ with open(os.path.join(args.save, "zeroshot_accuracies.json")) as f:
 
 eval_datasets = list(T5_DATASETS)
 task_vectors = []
-merge_name = getattr(args, "merge_func", "sum")
 
 for dataset in eval_datasets:
     checkpoint_dir = f"{args.save}/{dataset}"
     if args.finetuning_mode == "linear":
-        task_vectors.append(
-            LanguageLinearizedTaskVector(checkpoint_dir=checkpoint_dir)
-        )
+        task_vectors.append(LanguageLinearizedTaskVector(checkpoint_dir=checkpoint_dir))
     else:
-        task_vectors.append(
-            LanguageNonLinearTaskVector(checkpoint_dir=checkpoint_dir)
-        )
+        task_vectors.append(LanguageNonLinearTaskVector(checkpoint_dir=checkpoint_dir))
     print(f"Task vector {dataset} loaded")
 
 # Build HP grid
@@ -150,8 +104,8 @@ else:
             args,
             1.0,
         )
-        score = metrics["avg_normalized_top1"]
-        print(f"  {merge_kwargs} -> avg_normalized_top1={score:.4f}")
+        score = metrics["avg_top1"]
+        print(f"  {merge_kwargs} -> avg_top1={score:.4f}")
         if score > best_val_score:
             best_val_score = score
             best_merge_kwargs = merge_kwargs
@@ -175,36 +129,34 @@ test_metrics = evaluate_task_vector_at_coef(
 )
 
 print("=" * 100)
-print(f"Test normalized accuracy: {test_metrics['avg_normalized_top1']}")
-print(f"Test absolute accuracy: {test_metrics['avg_top1']}")
+print(f"Test accuracy: {test_metrics['avg_top1']}")
 
-additive_accuracies = {
-    "test": test_metrics,
-    "val": best_val_metrics,
-    "optimal_merge_hp": best_merge_kwargs,
+# Build olmes-style metrics.json
+tasks = []
+for dataset in eval_datasets:
+    top1 = test_metrics[f"{dataset}:top1"]
+    tasks.append(
+        {
+            "alias": dataset,
+            "metrics": {"top1": top1, "primary_score": top1},
+            "task_config": {"primary_metric": "top1"},
+        }
+    )
+
+metrics_json = {
+    "all_primary_scores": [
+        f"{t['alias']}: {t['metrics']['primary_score']:.6f}" for t in tasks
+    ],
+    "tasks": tasks,
+    "model_config": {
+        "model": args.model,
+        "merge_func": merge_name,
+        "finetuning_mode": args.finetuning_mode,
+        "seed": args.seed,
+        "optimal_merge_hp": best_merge_kwargs,
+    },
 }
 
-if args.finetuning_mode == "standard":
-    save_file = f"{args.save}/additions_{merge_name}.json"
-elif args.finetuning_mode == "linear":
-    save_file = f"{args.save}/linear_additions_{merge_name}.json"
-else:
-    save_file = f"{args.save}/{args.finetuning_mode}_additions_{merge_name}.json"
-
-with open(save_file, "w") as f:
-    json.dump(additive_accuracies, f, indent=4)
-print("Results saved to", save_file)
-
-if args.results_db:
-    append_result(
-        args.results_db,
-        {
-            "script": "eval_task_addition",
-            **args_to_dict(args),
-            "optimal_merge_hp": best_merge_kwargs,
-            **{f"test_{k}": v for k, v in test_metrics.items()},
-            **{f"val_{k}": v for k, v in best_val_metrics.items()},
-        },
-        _run_hash,
-    )
-    print("Results appended to", args.results_db)
+results_file.parent.mkdir(parents=True, exist_ok=True)
+results_file.write_text(json.dumps(metrics_json, indent=2))
+print(f"Results saved to {results_file}")
