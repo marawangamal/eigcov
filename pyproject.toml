@@ -2,24 +2,25 @@
 name = "eigcov"
 version = "0.1.0"
 description = "Add your description here"
-requires-python = ">=3.10"
+requires-python = ">=3.9"
 dependencies = [
-    "datasets>=4.8.4",
+    "datasets>=4.5.0",
     "evaluate>=0.4.6",
-    "huggingface-hub>=1.9.0",
-    "numpy>=2.2.6",
+    "huggingface-hub>=0.36.2",
+    "numpy>=2.0.2",
     "open-clip-torch>=3.3.0",
-    "peft>=0.18.1",
-    "pillow>=12.2.0",
+    "peft>=0.17.1",
+    "pillow>=11.3.0",
     "promptsource",
-    "protobuf>=7.34.1",
-    "scipy>=1.15.3",
+    "protobuf>=6.33.6",
+    "scikit-learn>=1.6.1",
+    "scipy>=1.13.1",
     "sentencepiece>=0.2.1",
-    "torch>=2.11.0",
-    "torchvision>=0.26.0",
+    "torch>=2.8.0",
+    "torchvision>=0.23.0",
     "tqdm>=4.67.3",
-    "transformers>=5.5.0",
-    "trl>=1.0.0",
+    "transformers==4.57.6",
+    "trl>=0.24.0",
 ]
 
 [tool.uv.sources]
