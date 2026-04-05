@@ -11,8 +11,6 @@ from tqdm import tqdm
 from src.task_vectors import _TaskVector
 
 
-
-
 def _load_stats_dict(path: str) -> dict:
     """Load a statistics dict from a .pt file or a directory of per-layer .pt files."""
     if os.path.isdir(path):
@@ -306,10 +304,10 @@ def merge_fisher(
         f.append(ft)
 
     # Shape: (N, Do*Di)
-    f = torch.stack(
-        [x.reshape(-1).to(device=tau.device, dtype=tau.dtype) for x in f]
+    f = torch.stack([x.reshape(-1).to(device=tau.device, dtype=tau.dtype) for x in f])
+    return _dinv(f.sum(dim=0)) * (f * tau.reshape(N, Do * Di)).sum(dim=0).reshape(
+        Do, Di
     )
-    return _dinv(f.sum(dim=0)) * (f * tau.reshape(N, Do * Di)).sum(dim=0)
 
 
 # ---------------------------------------------------------------------------
