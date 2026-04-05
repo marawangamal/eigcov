@@ -3,7 +3,10 @@ name = "eigcov"
 version = "0.1.0"
 description = "Add your description here"
 requires-python = ">=3.9"
-dependencies = [
+dependencies = []
+
+[dependency-groups]
+vision-language = [
     "datasets>=4.5.0",
     "evaluate>=0.4.6",
     "huggingface-hub>=0.36.2",
@@ -21,6 +24,10 @@ dependencies = [
     "transformers==4.57.6",
     "trl>=0.24.0",
 ]
+olmo = [
+    "ai2-olmes",
+]
 
 [tool.uv.sources]
 promptsource = { git = "https://github.com/bigscience-workshop/promptsource.git" }
+ai2-olmes = { path = "./olmes", editable = false }
