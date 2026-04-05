@@ -2,7 +2,7 @@
 name = "eigcov"
 version = "0.1.0"
 description = "Add your description here"
-requires-python = ">=3.9"
+requires-python = ">=3.10,<3.14"
 dependencies = []
 
 [dependency-groups]
@@ -18,14 +18,22 @@ vision-language = [
     "scikit-learn>=1.6.1",
     "scipy>=1.13.1",
     "sentencepiece>=0.2.1",
-    "torch>=2.8.0",
-    "torchvision>=0.23.0",
+    "torch==2.8.0",
+    "torchvision==0.23.0",
     "tqdm>=4.67.3",
     "transformers==4.57.6",
     "trl>=0.24.0",
 ]
 olmo = [
     "ai2-olmes",
+]
+
+[tool.uv]
+conflicts = [
+    [
+        { group = "vision-language" },
+        { group = "olmo" },
+    ],
 ]
 
 [tool.uv.sources]

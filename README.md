@@ -5,8 +5,21 @@ Data-free model merging via eigenvalue covariance estimation of task vectors.
 ## Setup
 
 ```sh
-pip install -r requirements.txt
+git clone --recurse-submodules <repo-url>
+# If already cloned without submodules:
+# git submodule update --init --recursive
+cd eigcov
 export PYTHONPATH="$PYTHONPATH:$PWD"
+```
+
+Install dependencies for the experiment track you need:
+
+```sh
+# Vision & language experiments
+uv sync --group vision-language
+
+# OLMo experiments (requires olmes submodule)
+uv sync --group olmo
 ```
 
 ## Vision Experiments (ViT-B-16 / ViT-B-32 / ViT-L-14)
