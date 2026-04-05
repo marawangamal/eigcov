@@ -10,8 +10,8 @@ uv init --python 3.9 --no-readme
 
 uv add torch torchvision numpy scipy tqdm Pillow \
   "transformers==4.57.6" datasets huggingface-hub peft evaluate trl \
-  sentencepiece protobuf \
-  open-clip-torch scikit-learn
+  sentencepiece \
+  "open-clip-torch==2.10.1" scikit-learn
 
 
 uv add "promptsource @ git+https://github.com/bigscience-workshop/promptsource.git"
