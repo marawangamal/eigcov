@@ -48,7 +48,7 @@ BATCH_SIZE=32
 # Evaluate all merging methods using their default settings.
 # Results are stored in the main results database.
 MODELS=(ViT-B-16 ViT-B-32 ViT-L-14)
-METHODS=(isoc2)
+METHODS=(isoc3)
 FT_MODE=standard
 HPO=""
 
