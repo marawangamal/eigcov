@@ -49,12 +49,9 @@ for hf_id in "${FINETUNED_IDS[@]}"; do
     python scripts/olmo/save_model_param_folder.py --model "$hf_id" --output-dir "$ft_dir"
   fi
 
-  # Symlink zeroshot → pretrained
+  # Symlink zeroshot → pretrained (always refresh to handle re-downloads)
   zs_link="${BASE}/${task}/zeroshot"
-  if [[ -L "$zs_link" || -d "$zs_link" ]]; then
-    echo ">>> Skipping ${task}/zeroshot: already exists"
-  else
-    echo ">>> Symlinking ${task}/zeroshot → ${PRETRAINED_DIR}"
-    ln -s "$PRETRAINED_DIR" "$zs_link"
-  fi
+  rm -f "$zs_link"
+  ln -s "$(realpath "$PRETRAINED_DIR")" "$zs_link"
+  echo ">>> Symlinked ${task}/zeroshot → $(realpath "$PRETRAINED_DIR")"
 done

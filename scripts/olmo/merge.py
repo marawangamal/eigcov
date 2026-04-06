@@ -41,15 +41,10 @@ def parse_args():
         description="Merge param-folder task vectors into a HuggingFace checkpoint."
     )
     parser.add_argument(
-        "--pretrained-dir",
-        required=True,
-        help="Param-folder directory for the pretrained base model.",
-    )
-    parser.add_argument(
-        "--finetuned-dirs",
+        "--task-dirs",
         nargs="+",
         required=True,
-        help="Param-folder directories for finetuned models.",
+        help="Task directories, each containing zeroshot/ and finetuned/ subdirectories.",
     )
     parser.add_argument(
         "--merge-func",
@@ -138,34 +133,34 @@ def main():
     if args.hf_cache_dir:
         os.environ["HF_HOME"] = args.hf_cache_dir
 
-    pretrained_dir = Path(args.pretrained_dir).expanduser().resolve()
-    finetuned_dirs = [Path(p).expanduser().resolve() for p in args.finetuned_dirs]
+    task_dirs = [Path(p).expanduser().resolve() for p in args.task_dirs]
     output_dir = Path(args.output_dir).expanduser().resolve()
 
+    # Validate task dirs
+    for td in task_dirs:
+        zs = td / "zeroshot"
+        ft = td / "finetuned"
+        if not zs.exists() or not ft.exists():
+            raise FileNotFoundError(
+                f"Task directory {td} must contain zeroshot/ and finetuned/ subdirectories.\n"
+                "Run scripts/olmo/download_models.sh first."
+            )
+
+    # Read HF model ID from the first task dir's zeroshot (pretrained) checkpoint
+    pretrained_dir = (task_dirs[0] / "zeroshot").resolve()
     hf_model_id = args.hf_model_id or _read_hf_model_id(pretrained_dir)
 
-    print(f"Pretrained dir : {pretrained_dir}")
-    print(f"Finetuned dirs : {len(finetuned_dirs)} models")
+    print(f"Task dirs      : {len(task_dirs)} models")
     print(f"Merge function : {args.merge_func}")
     print(f"HF model ID    : {hf_model_id}")
     print(f"Output dir     : {output_dir}")
     print("=" * 80)
 
     # Build lazy task vectors — no full model loading happens here.
-    # Each ParamFolderTaskVector expects a checkpoint_dir containing zeroshot/ and
-    # finetuned/ subdirectories.  We create temporary directories with symlinks
-    # pointing to the user-provided pretrained and finetuned param-folders.
-    import tempfile
-
-    tmp_root = Path(tempfile.mkdtemp(prefix="merge_ckpts_"))
     task_vectors = []
-    for ft_dir in finetuned_dirs:
-        print(f"  Creating task vector: {ft_dir.name}")
-        ckpt_dir = tmp_root / ft_dir.name
-        ckpt_dir.mkdir()
-        (ckpt_dir / "zeroshot").symlink_to(pretrained_dir)
-        (ckpt_dir / "finetuned").symlink_to(ft_dir)
-        tv = ParamFolderTaskVector(checkpoint_dir=str(ckpt_dir))
+    for td in task_dirs:
+        print(f"  Creating task vector: {td.name}")
+        tv = ParamFolderTaskVector(checkpoint_dir=str(td))
         task_vectors.append(tv)
 
     print(f"\nMerging {len(task_vectors)} task vectors with '{args.merge_func}' ...")
@@ -205,7 +200,7 @@ def main():
 
     # Copy tokenizer — default to first finetuned dir (has chat_template).
     tokenizer_dir = (
-        Path(args.tokenizer_dir) if args.tokenizer_dir else finetuned_dirs[0]
+        Path(args.tokenizer_dir) if args.tokenizer_dir else task_dirs[0] / "finetuned"
     )
     print(f"Copying tokenizer from {tokenizer_dir} ...")
     tokenizer = AutoTokenizer.from_pretrained(str(tokenizer_dir), trust_remote_code=trc)

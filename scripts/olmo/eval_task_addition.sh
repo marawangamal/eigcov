@@ -7,14 +7,18 @@
 #   bash scripts/olmo/eval_task_addition.sh
 set -euo pipefail
 
+# 0. Setup environment
+source "$SCRATCH/eigcov/.venv-olmo/bin/activate"
+export PYTHONPATH="$PYTHONPATH:$PWD"
+export SSL_CERT_DIR=/etc/ssl/certs
+
 # ── CONFIG ────────────────────────────────────────────────────────────────────
 MODEL="Olmo-3-7b"
 METHODS=(eigcov tsv mean isoc)
-PRETRAINED_DIR="checkpoints/${MODEL}/pretrained"
-FINETUNED_DIRS=(
-  "checkpoints/${MODEL}/Math/finetuned"
-  "checkpoints/${MODEL}/Code/finetuned"
-  "checkpoints/${MODEL}/IF/finetuned"
+TASK_DIRS=(
+  "checkpoints/${MODEL}/Math"
+  "checkpoints/${MODEL}/Code"
+  "checkpoints/${MODEL}/IF"
 )
 
 # ── OLMES ─────────────────────────────────────────────────────────────────────
@@ -32,7 +36,7 @@ BATCH_SIZE=128
 # ── Merge + Evaluate ────────────────────────────────────────────────────────
 for method in "${METHODS[@]}"; do
   MERGED_DIR="checkpoints/${MODEL}/${method}"
-  RESULTS_DIR="results/${MODEL}/${method}"
+  RESULTS_DIR="results/${MODEL}-${method}"
 
   echo "============================================================"
   echo "Method: ${method}"
@@ -45,8 +49,7 @@ for method in "${METHODS[@]}"; do
     echo ">>> Skipping merge: ${MERGED_DIR} already exists"
   else
     python scripts/olmo/merge.py \
-      --pretrained-dir "$PRETRAINED_DIR" \
-      --finetuned-dirs "${FINETUNED_DIRS[@]}" \
+      --task-dirs "${TASK_DIRS[@]}" \
       --merge-func "$method" \
       --output-dir "$MERGED_DIR"
   fi
