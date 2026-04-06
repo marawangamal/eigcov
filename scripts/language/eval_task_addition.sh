@@ -17,8 +17,8 @@ export PYTHONPATH="$PYTHONPATH:$PWD"
 export SSL_CERT_DIR=/etc/ssl/certs
 
 # ===== Default experiments (no hyperparameter tuning) =====
-MODELS=(t5-base t5-large)
-METHODS=(isoc)
+MODELS=(t5-large)
+METHODS=(eigcov tsv)
 FT_MODE=standard
 HPO=""
 
