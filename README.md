@@ -24,6 +24,8 @@ UV_PROJECT_ENVIRONMENT=.venv-olmo uv sync --group olmo
 # Set env vars
 export PYTHONPATH="$PYTHONPATH:$(pwd)" # Add src to python path
 export HF_HOME=$SCRATCH/huggingface
+# python -c "import nltk; nltk.download('punkt', download_dir='$SCRATCH/nltk_data')"
+export NLTK_DATA=$SCRATCH/nltk_data
 ```
 
 ## Vision Experiments (ViT-B-16 / ViT-B-32 / ViT-L-14)
