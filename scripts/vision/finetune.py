@@ -324,14 +324,12 @@ def finetune(rank, args):
 
     if lora_finetuning:
         target_modules = args.lora_target_modules.split(",")
-        # target_parameters = args.lora_target_parameters.split(",")
         image_encoder = apply_lora(
             image_encoder,
             args.lora_rank,
             args.lora_alpha,
             args.lora_dropout,
             target_modules=target_modules,
-            # target_parameters=target_parameters,  # TODO: make this work
         )
 
     classification_head = get_classification_head(args, train_dataset)

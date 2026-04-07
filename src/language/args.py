@@ -144,12 +144,6 @@ def parse_arguments():
         help="Stop training after this many checkpoints without validation improvement.",
     )
     parser.add_argument(
-        "--exp-name",
-        type=str,
-        default=None,
-        help="Name of the experiment, for organization purposes only.",
-    )
-    parser.add_argument(
         "--merge-func",
         type=str,
         default="sum",

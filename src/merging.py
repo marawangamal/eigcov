@@ -199,6 +199,7 @@ def merge_isoc(taus: torch.Tensor, mode="mean", **kwargs):
 
 
 merge_isoc2 = lambda *args, **kwargs: merge_isoc(*args, mode="mean", **kwargs) * 2.0
+merge_isoc3 = lambda *args, **kwargs: merge_isoc(*args, mode="mean", **kwargs) * 3.0
 
 
 # ---------------------------------------------------------------------------

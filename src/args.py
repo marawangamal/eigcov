@@ -26,12 +26,6 @@ def parse_arguments():
         help="Which dataset(s) to patch on.",
     )
     parser.add_argument(
-        "--exp_name",
-        type=str,
-        default=None,
-        help="Name of the experiment, for organization purposes only.",
-    )
-    parser.add_argument(
         "--results-db",
         type=str,
         default=None,
@@ -139,13 +133,6 @@ def parse_arguments():
         help="Comma-separated list of target modules for LoRA.",
     )
     parser.add_argument(
-        "--lora-target-parameters",
-        type=str,
-        # default="in_proj_weight",
-        default=None,
-        help="Comma-separated list of target parameters for LoRA.",
-    )
-    parser.add_argument(
         "--hpo",
         type=json.loads,
         default=None,
@@ -230,15 +217,6 @@ def parse_arguments():
         help="Max number of batches to use in phase 1 (coefficient selection). Default: 50.",
     )
     parser.add_argument(
-        "--cosine-samples",
-        type=int,
-        default=0,
-        help=(
-            "If > 0, track cosine similarity between consecutive optimizer-step gradients "
-            "using the first N trainable parameter tensors. Results saved to {ckpdir}/cosine_sim.npz."
-        ),
-    )
-    parser.add_argument(
         "--max-steps",
         type=int,
         default=None,
@@ -249,18 +227,6 @@ def parse_arguments():
         action="store_true",
         default=False,
         help="Per-layer matrix measurement of gradient cross-term condition (i).",
-    )
-    parser.add_argument(
-        "--mid-checkpoint-step",
-        type=int,
-        default=None,
-        help="Training step of the intermediate checkpoint used for eigcov covariance (e.g. 500).",
-    )
-    parser.add_argument(
-        "--eigcov-reverse",
-        action="store_true",
-        default=False,
-        help="Use Delta = W_k - W_0 instead of Delta = W_T - W_k for eigcov covariance.",
     )
     parsed_args = parser.parse_args()
     parsed_args.device = "cuda" if torch.cuda.is_available() else "cpu"

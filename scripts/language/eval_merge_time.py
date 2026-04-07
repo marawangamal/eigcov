@@ -32,12 +32,10 @@ _HASH_IGNORE = {
     "keep_checkpoints",
     "port",
     "world_size",
-    "cosine_samples",
     "lora_rank",
     "lora_alpha",
     "lora_dropout",
     "lora_target_modules",
-    "lora_target_parameters",
     # environment / paths
     "hf_cache_dir",
     "cache_dir",
@@ -51,7 +49,6 @@ _HASH_IGNORE = {
     "eval_max_batches",
     # metadata
     "results_db",
-    "exp_name",
     "overwrite",
     "num_workers",
     "device",

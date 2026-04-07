@@ -31,7 +31,8 @@ OLMES_TASKS=(
 )
 OLMES_MODEL_ARGS='{"gpu_memory_utilization": 0.8, "trust_remote_code": false, "max_length": 16384}'
 GPUS=4
-BATCH_SIZE=128
+BATCH_SIZE=64
+NUM_WORKERS=1
 
 # ── Merge + Evaluate ────────────────────────────────────────────────────────
 for method in "${METHODS[@]}"; do
@@ -58,6 +59,7 @@ for method in "${METHODS[@]}"; do
   if ls "$RESULTS_DIR"/*-metrics-all.json &>/dev/null; then
     echo ">>> Skipping eval: ${RESULTS_DIR} already has results"
   else
+    echo ">>> Evaluating: Batch size = $BATCH_SIZE, Number of workers = $NUM_WORKERS, GPUs = $GPUS"
     olmes \
       --model "$MERGED_DIR" \
       --task "${OLMES_TASKS[@]}" \
@@ -65,6 +67,7 @@ for method in "${METHODS[@]}"; do
       --gpus "$GPUS" \
       --model-type vllm \
       --model-args "$OLMES_MODEL_ARGS" \
-      --batch-size "$BATCH_SIZE"
+      --batch-size "$BATCH_SIZE" \
+      --num-workers "$NUM_WORKERS"
   fi
 done
