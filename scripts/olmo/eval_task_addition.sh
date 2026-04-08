@@ -60,6 +60,7 @@ for method in "${METHODS[@]}"; do
     echo ">>> Skipping eval: ${RESULTS_DIR} already has results"
   else
     echo ">>> Evaluating: Batch size = $BATCH_SIZE, Number of workers = $NUM_WORKERS, GPUs = $GPUS"
+    echo ">>> Model: $MERGED_DIR, tasks: ${OLMES_TASKS[@]}"
     olmes \
       --model "$MERGED_DIR" \
       --task "${OLMES_TASKS[@]}" \

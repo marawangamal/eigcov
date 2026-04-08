@@ -3,7 +3,7 @@ import json
 import os
 from pathlib import Path
 
-from src.language.args import parse_arguments
+from src.args import parse_arguments
 from src.language.eval import evaluate_task_vector_at_coef
 from src.language.task_vectors import (
     LanguageLinearizedTaskVector,
@@ -82,7 +82,7 @@ best_val_score = -float("inf")
 best_merge_kwargs = {}
 best_val_metrics = {}
 
-_set_eval_split(args.eval_val_split)
+_set_eval_split("validation")
 args.eval_max_batches = getattr(args, "eval_val_max_batches", None)
 print("=" * 100)
 if len(hp_combos) <= 1:
@@ -90,7 +90,7 @@ if len(hp_combos) <= 1:
     print(f"PHASE 1: SKIPPED (single HP combo: {best_merge_kwargs})")
 else:
     print(
-        f"PHASE 1: SPLIT={args.eval_val_split.upper()} — grid search over {len(hp_combos)} HP combos"
+        f"PHASE 1: SPLIT=VALIDATION — grid search over {len(hp_combos)} HP combos"
         + (f" (max {args.eval_max_batches} batches)" if args.eval_max_batches else "")
     )
     print("=" * 100)
@@ -98,7 +98,7 @@ else:
         print(f"  {merge_kwargs}")
         task_vector = combine_task_vectors(task_vectors, merge_name, **merge_kwargs)
         metrics = evaluate_task_vector_at_coef(
-            args.eval_val_split,
+            "validation",
             task_vector,
             pretrained_dir,
             args,
@@ -113,15 +113,15 @@ else:
 
 print(f"Best merge HP (from phase 1): {best_merge_kwargs}")
 
-# Phase 2: evaluate at best HP combo on eval-test-split
-_set_eval_split(args.eval_test_split)
+# Phase 2: evaluate at best HP combo on test split
+_set_eval_split("test")
 args.eval_max_batches = None
 print("=" * 100)
-print(f"PHASE 2: SPLIT={args.eval_test_split.upper()} — evaluating at best HP combo")
+print("PHASE 2: SPLIT=TEST — evaluating at best HP combo")
 print("=" * 100)
 task_vector = combine_task_vectors(task_vectors, merge_name, **best_merge_kwargs)
 test_metrics = evaluate_task_vector_at_coef(
-    args.eval_test_split,
+    "test",
     task_vector,
     pretrained_dir,
     args,

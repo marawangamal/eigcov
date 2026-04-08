@@ -3,7 +3,7 @@ import json
 import os
 import time
 
-from src.language.args import parse_arguments
+from src.args import parse_arguments
 from src.language.task_vectors import (
     LanguageLinearizedTaskVector,
     LanguageNonLinearTaskVector,

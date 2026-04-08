@@ -21,7 +21,7 @@ from transformers import AutoTokenizer
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.language.args import parse_arguments
+from src.args import parse_arguments
 from src.language.task_vectors import (
     LanguageNonLinearTaskVector,
     LanguageLinearizedTaskVector,

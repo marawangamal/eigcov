@@ -1,7 +1,7 @@
 import json
 import os
 
-from src.language.args import parse_arguments
+from src.args import parse_arguments
 from src.language.eval import eval_single_dataset
 from src.language.task_vectors import (
     LanguageLinearizedTaskVector,

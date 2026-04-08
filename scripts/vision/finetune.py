@@ -323,13 +323,12 @@ def finetune(rank, args):
             image_encoder.save(zs_path)
 
     if lora_finetuning:
-        target_modules = args.lora_target_modules.split(",")
         image_encoder = apply_lora(
             image_encoder,
             args.lora_rank,
             args.lora_alpha,
             args.lora_dropout,
-            target_modules=target_modules,
+            target_modules="all-linear",
         )
 
     classification_head = get_classification_head(args, train_dataset)

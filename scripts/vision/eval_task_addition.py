@@ -101,7 +101,7 @@ best_val_score = -float("inf")
 best_merge_kwargs = {}
 best_val_metrics = {}
 
-_set_eval_split(args.eval_val_split)
+_set_eval_split("val")
 args.eval_max_batches = getattr(args, "eval_val_max_batches", None)
 print("=" * 100)
 if len(hp_combos) <= 1:
@@ -109,7 +109,7 @@ if len(hp_combos) <= 1:
     print(f"PHASE 1: SKIPPED (single HP combo: {best_merge_kwargs})")
 else:
     print(
-        f"PHASE 1: SPLIT={args.eval_val_split.upper()} — grid search over {len(hp_combos)} HP combos"
+        f"PHASE 1: SPLIT=VAL — grid search over {len(hp_combos)} HP combos"
         + (f" (max {args.eval_max_batches} batches)" if args.eval_max_batches else "")
     )
     print("=" * 100)
@@ -132,11 +132,11 @@ else:
 
 print(f"Best merge HP (from phase 1): {best_merge_kwargs}")
 
-# Phase 2: evaluate at best HP combo on eval-test-split (use all batches).
-_set_eval_split(args.eval_test_split)
+# Phase 2: evaluate at best HP combo on the test split (use all batches).
+_set_eval_split("test")
 args.eval_max_batches = None
 print("=" * 100)
-print(f"PHASE 2: SPLIT={args.eval_test_split.upper()} — evaluating at best HP combo")
+print("PHASE 2: SPLIT=TEST — evaluating at best HP combo")
 print("=" * 100)
 task_vector = _merge_and_remap(best_merge_kwargs)
 test_metrics = evaluate_task_vector_at_coef(

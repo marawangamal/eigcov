@@ -15,7 +15,6 @@ Usage:
     python scripts/olmo/covariance.py --capability all --save checkpoints/olmo
 """
 
-import argparse
 import os
 
 import torch
@@ -24,6 +23,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
+from src.args import parse_arguments
 from src.covariance import register_hooks
 
 PRETRAINED_MODEL = "allenai/Olmo-3-1025-7B"
@@ -31,52 +31,10 @@ PRETRAINED_TOKENIZER = "allenai/Olmo-3-7B-RL-Zero-Math"
 MAX_SEQ_LEN = 256
 
 CAPABILITY_DATASETS = {
-    "math": "allenai/Dolci-RL-Zero-Math-7B",
-    "code": "allenai/Dolci-RL-Zero-Code-7B",
-    "if": "allenai/Dolci-RL-Zero-IF-7B",
+    "Math": "allenai/Dolci-RL-Zero-Math-7B",
+    "Code": "allenai/Dolci-RL-Zero-Code-7B",
+    "IF": "allenai/Dolci-RL-Zero-IF-7B",
 }
-
-# Maps capability to the finetuned model dir name (used for output paths)
-CAPABILITY_MODEL_DIRS = {
-    "math": "allenai-Olmo-3-7B-RL-Zero-Math",
-    "code": "allenai-Olmo-3-7B-RL-Zero-Code",
-    "if": "allenai-Olmo-3-7B-RL-Zero-IF",
-}
-
-
-def parse_args():
-    p = argparse.ArgumentParser(
-        description="Collect activation covariances for Olmo-3-7B"
-    )
-    p.add_argument(
-        "--capability",
-        type=str,
-        required=True,
-        choices=list(CAPABILITY_DATASETS.keys()) + ["all"],
-    )
-    p.add_argument("--save", type=str, default="checkpoints/olmo")
-    p.add_argument("--hf-cache-dir", type=str, default=None)
-    p.add_argument("--bf16", action="store_true", default=True)
-    p.add_argument(
-        "--cov-type",
-        type=str,
-        default="sm",
-        choices=["sm", "cov"],
-    )
-    p.add_argument(
-        "--cov-estimator",
-        type=str,
-        default="full",
-        choices=["avg", "sampled", "full"],
-    )
-    p.add_argument("--cov-num-batches", type=int, default=10)
-    p.add_argument("--cov-batch-size", type=int, default=32)
-    p.add_argument(
-        "--overwrite",
-        action="store_true",
-        help="Re-collect even if covariance.npz exists",
-    )
-    return p.parse_args()
 
 
 def collect_covariance(capability, args):
@@ -84,20 +42,20 @@ def collect_covariance(capability, args):
     print(f"Collecting covariance: {capability}")
     print(f"{'='*60}")
 
-    run_dir = os.path.join(args.save, CAPABILITY_MODEL_DIRS[capability])
+    run_dir = os.path.join(args.save, capability)
     cov_path = os.path.join(run_dir, "covariance.pt")
 
     if os.path.exists(cov_path) and not args.overwrite:
         print(f"  Skipping {capability} — {cov_path} already exists")
         return
 
-    if args.hf_cache_dir:
-        os.environ["HF_HOME"] = args.hf_cache_dir
+    if args.cache_dir:
+        os.environ["HF_HOME"] = args.cache_dir
 
     # Load dataset
     dataset_id = CAPABILITY_DATASETS[capability]
     print(f"  Dataset: {dataset_id}")
-    ds = load_dataset(dataset_id, split="train", cache_dir=args.hf_cache_dir)
+    ds = load_dataset(dataset_id, split="train", cache_dir=args.cache_dir)
     print(f"  {len(ds)} examples")
 
     if len(ds) == 0:
@@ -106,7 +64,7 @@ def collect_covariance(capability, args):
 
     # Load tokenizer (from RL-Zero Math model which has a chat template)
     tokenizer = AutoTokenizer.from_pretrained(
-        PRETRAINED_TOKENIZER, cache_dir=args.hf_cache_dir
+        PRETRAINED_TOKENIZER, cache_dir=args.cache_dir
     )
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -139,8 +97,8 @@ def collect_covariance(capability, args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = AutoModelForCausalLM.from_pretrained(
         PRETRAINED_MODEL,
-        torch_dtype=torch.bfloat16 if args.bf16 else torch.float32,
-        cache_dir=args.hf_cache_dir,
+        torch_dtype=torch.bfloat16,
+        cache_dir=args.cache_dir,
     )
     model.to(device)
     model.eval()
@@ -155,14 +113,15 @@ def collect_covariance(capability, args):
     )
 
     # Forward pass loop
+    max_num_batches = max(args.cov_num_batches)
     n_batches = 0
     with torch.no_grad():
         for batch in tqdm(
             dataloader,
             desc="Computing covariance",
-            total=min(args.cov_num_batches, len(dataloader)),
+            total=min(max_num_batches, len(dataloader)),
         ):
-            if n_batches >= args.cov_num_batches:
+            if n_batches >= max_num_batches:
                 break
             input_ids = batch["input_ids"].to(device)
             attention_mask = batch["attention_mask"].to(device)
@@ -186,7 +145,9 @@ def collect_covariance(capability, args):
 
 
 def main():
-    args = parse_args()
+    args = parse_arguments()
+    if args.save is None:
+        args.save = "checkpoints/Olmo-3-7b"
 
     if args.capability == "all":
         for cap in CAPABILITY_DATASETS:
