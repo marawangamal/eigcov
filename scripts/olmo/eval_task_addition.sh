@@ -30,8 +30,8 @@ OLMES_TASKS=(
   "aime:zs_cot_r1::pass_at_32_2025_deepseek"
 )
 OLMES_MODEL_ARGS='{"gpu_memory_utilization": 0.8, "trust_remote_code": false, "max_length": 16384}'
-GPUS=4
-BATCH_SIZE=128
+GPUS=2
+BATCH_SIZE=64
 
 # ── Merge + Evaluate ────────────────────────────────────────────────────────
 for method in "${METHODS[@]}"; do
