@@ -25,7 +25,8 @@ vision-language = [
     "trl>=0.24.0",
 ]
 olmo = [
-    "ai2-olmes",
+    "ai2-olmes[gpu]",
+    "setuptools<81",
 ]
 
 [tool.uv]

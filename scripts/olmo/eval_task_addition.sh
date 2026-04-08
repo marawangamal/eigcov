@@ -31,7 +31,7 @@ OLMES_TASKS=(
 )
 OLMES_MODEL_ARGS='{"gpu_memory_utilization": 0.8, "trust_remote_code": false, "max_length": 16384}'
 GPUS=2
-BATCH_SIZE=64
+BATCH_SIZE=32
 
 # ── Merge + Evaluate ────────────────────────────────────────────────────────
 for method in "${METHODS[@]}"; do

@@ -24,18 +24,17 @@ UV_PROJECT_ENVIRONMENT=.venv-olmo uv sync --group olmo
 # Set env vars
 export PYTHONPATH="$PYTHONPATH:$(pwd)" # Add src to python path
 export HF_HOME=$SCRATCH/huggingface
+# python -c "import nltk; nltk.download('punkt', download_dir='$SCRATCH/nltk_data')"
+export NLTK_DATA=$SCRATCH/nltk_data
 ```
 
 ## Vision Experiments (ViT-B-16 / ViT-B-32 / ViT-L-14)
 
 ```sh
-# 1. Download checkpoints or Finetune base model
-gdown ... # download
-# bash scripts/vision/finetune.sh  # finetune
-
+# 1. Download checkpoints
+gdown <URL> # or finetune using bash scripts/vision/finetune.sh
 # 2. (Optional) Evaluate experts
 bash scripts/vision/eval_single_task.sh
-
 # 3. Evaluate merged models
 bash scripts/vision/eval_task_addition.sh
 ```
@@ -45,13 +44,10 @@ Results are saved to `results/{model}-{method}/metrics.json`.
 ## Language Experiments (T5-Base / T5-Large)
 
 ```sh
-# 1. Download checkpoints or Finetune base model
-gdown ... # download
-# bash scripts/vision/finetune.sh  # finetune
-
+# 1. Download checkpoints
+gdown <URL>  # or finetune using bash scripts/vision/finetune.sh
 # 2. (Optional) Evaluate experts
 bash scripts/language/eval_single_task.sh
-
 # 3. Evaluate merged models
 bash scripts/language/eval_task_addition.sh
 ```
@@ -61,14 +57,19 @@ Results are saved to `results/{model}-{method}/metrics.json`.
 ## OLMo Experiments (Olmo-3-7b)
 
 ```sh
-# 1. Set env vars
-export HF_HOME=$SCRATCH/huggingface
-
-# 2. Download models and extract to parameter folders
+# 1. Download checkpoints
 bash scripts/olmo/download_models.sh
-# 3. (Optional) Evaluate experts
+# 2. (Optional) Evaluate experts
 bash scripts/olmo/eval_single_task.sh
-# 4. Evaluate merged models
+# 3. Evaluate merged models
 bash scripts/olmo/eval_task_addition.sh # (default gpus: 4)
+```
+
+
+## Reproducing Plots
+```sh
+
+# Fig. 1-3 (cross|corr|drift) errors
+# run finetune using --grad
 ```
 
