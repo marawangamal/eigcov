@@ -15,11 +15,6 @@ export SSL_CERT_DIR=/etc/ssl/certs
 # ── CONFIG ────────────────────────────────────────────────────────────────────
 MODEL="Olmo-3-7b"
 METHODS=(eigcov tsv mean isoc)
-TASK_DIRS=(
-  "checkpoints/${MODEL}/Math"
-  "checkpoints/${MODEL}/Code"
-  "checkpoints/${MODEL}/IF"
-)
 
 # ── OLMES ─────────────────────────────────────────────────────────────────────
 OLMES_TASKS=(
@@ -50,7 +45,7 @@ for method in "${METHODS[@]}"; do
     echo ">>> Skipping merge: ${MERGED_DIR} already exists"
   else
     python scripts/olmo/merge.py \
-      --task-dirs "${TASK_DIRS[@]}" \
+      --save "checkpoints/${MODEL}" \
       --merge-func "$method" \
       --output-dir "$MERGED_DIR"
   fi
