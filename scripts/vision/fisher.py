@@ -143,7 +143,10 @@ if __name__ == "__main__":
             # Divide in-place, then build saveable dict
             for v in fisher.values():
                 v.div_(n_batches)
-            saveable = {"image_encoder." + k.replace(".weight", ""): v.cpu() for k, v in fisher.items()}
+            saveable = {
+                "image_encoder." + k.replace(".weight", ""): v.cpu()
+                for k, v in fisher.items()
+            }
             saveable["n_batches"] = n_batches
             torch.save(saveable, _fisher_path)
             print(f"  Saved to {_fisher_path}")

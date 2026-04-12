@@ -12,13 +12,15 @@ set -euo pipefail
 mkdir -p logs
 
 # 0. Setup environment
-source "$SCRATCH/eigcov/.venv/bin/activate"
+source "$SCRATCH/eigcov/.venv-vl/bin/activate"
+export HF_HOME=$SCRATCH/huggingface
+export NLTK_DATA=$SCRATCH/nltk_data
 export PYTHONPATH="$PYTHONPATH:$PWD"
 export SSL_CERT_DIR=/etc/ssl/certs
 
 # ===== Default experiments (no hyperparameter tuning) =====
 MODELS=(t5-base t5-large)
-METHODS=(regmean)
+METHODS=(difisher_v2)
 FT_MODE=standard
 HPO=""
 

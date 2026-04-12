@@ -12,7 +12,7 @@ set -euo pipefail
 mkdir -p logs
 
 # 0. Setup environment
-source "$SCRATCH/eigcov/.venv/bin/activate"
+source "$SCRATCH/eigcov/.venv-vl/bin/activate"
 export PYTHONPATH="$PYTHONPATH:$PWD"
 export SSL_CERT_DIR=/etc/ssl/certs
 
@@ -48,7 +48,7 @@ BATCH_SIZE=32
 # Evaluate all merging methods using their default settings.
 # Results are stored in the main results database.
 MODELS=(ViT-B-16 ViT-B-32 ViT-L-14)
-METHODS=(isoc2)
+METHODS=(difisher)
 FT_MODE=standard
 HPO=""
 
