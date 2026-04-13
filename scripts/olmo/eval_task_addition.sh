@@ -11,10 +11,12 @@ set -euo pipefail
 source "$SCRATCH/eigcov/.venv-olmo/bin/activate"
 export PYTHONPATH="$PYTHONPATH:$PWD"
 export SSL_CERT_DIR=/etc/ssl/certs
+export HF_HOME=$SCRATCH/huggingface
+export NLTK_DATA=$SCRATCH/nltk_data
 
 # ── CONFIG ────────────────────────────────────────────────────────────────────
 MODEL="Olmo-3-7b"
-METHODS=(eigcov tsv mean isoc)
+METHODS=(ace)
 TASK_DIRS=(
   "checkpoints/${MODEL}/Math"
   "checkpoints/${MODEL}/Code"
@@ -30,8 +32,8 @@ OLMES_TASKS=(
   "aime:zs_cot_r1::pass_at_32_2025_deepseek"
 )
 OLMES_MODEL_ARGS='{"gpu_memory_utilization": 0.8, "trust_remote_code": false, "max_length": 16384}'
-GPUS=2
-BATCH_SIZE=8
+GPUS=4
+BATCH_SIZE=32
 NUM_WORKERS=1
 
 # ── Merge + Evaluate ────────────────────────────────────────────────────────
