@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 from src.vision.task_vectors import NonLinearTaskVector, LinearizedTaskVector
 from src.vision.eval import eval_single_dataset
 from src.args import parse_arguments
+from src.utils import get_prefix
 
 
 def compute_disentanglement_error(
@@ -158,6 +159,7 @@ if __name__ == "__main__":
     # HACK: Some command line arguments are overwritten by defaults here.
     args.batch_size = 64 if args.model == "ViT-L-14" else 128
     args.save = f"checkpoints/{args.model}"
+    prefix = get_prefix(args.finetuning_mode)
 
     model = args.model
     results_dir = f"results/{model}"
@@ -179,8 +181,8 @@ if __name__ == "__main__":
         ckpt_dir_2 = f"checkpoints/{model}/{dataset_2}Val"
 
         # --- Non-linear FT (top row) ---
-        tv1 = NonLinearTaskVector(checkpoint_dir=ckpt_dir_1)
-        tv2 = NonLinearTaskVector(checkpoint_dir=ckpt_dir_2)
+        tv1 = NonLinearTaskVector(checkpoint_dir=ckpt_dir_1, prefix=prefix)
+        tv2 = NonLinearTaskVector(checkpoint_dir=ckpt_dir_2, prefix=prefix)
 
         grid_nl = compute_disentanglement_error(
             tv1,

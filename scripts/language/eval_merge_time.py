@@ -10,6 +10,7 @@ from src.language.task_vectors import (
 )
 from src.merging import combine_task_vectors
 from src.results_db import append_result, args_to_dict, make_run_hash, record_exists
+from src.utils import get_prefix
 
 T5_DATASETS = ["qasc", "wiki_qa", "quartz", "paws", "story_cloze", "winogrande", "wsc"]
 
@@ -18,6 +19,7 @@ if args.seed is not None:
     args.save = f"checkpoints_{args.seed}/{args.model}"
 else:
     args.save = f"checkpoints/{args.model}"
+prefix = get_prefix(args.finetuning_mode)
 
 _HASH_IGNORE = {
     # training-only
@@ -81,11 +83,11 @@ for dataset in eval_datasets:
     checkpoint_dir = f"{args.save}/{dataset}"
     if args.finetuning_mode == "linear":
         task_vectors.append(
-            LanguageLinearizedTaskVector(checkpoint_dir=checkpoint_dir)
+            LanguageLinearizedTaskVector(checkpoint_dir=checkpoint_dir, prefix=prefix)
         )
     else:
         task_vectors.append(
-            LanguageNonLinearTaskVector(checkpoint_dir=checkpoint_dir)
+            LanguageNonLinearTaskVector(checkpoint_dir=checkpoint_dir, prefix=prefix)
         )
     print(f"Task vector {dataset} loaded")
 

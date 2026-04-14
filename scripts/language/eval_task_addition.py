@@ -10,6 +10,7 @@ from src.language.task_vectors import (
     LanguageNonLinearTaskVector,
 )
 from src.merging import combine_task_vectors
+from src.utils import get_prefix
 
 T5_DATASETS = ["qasc", "wiki_qa", "quartz", "paws", "story_cloze", "winogrande", "wsc"]
 
@@ -19,31 +20,16 @@ if args.seed is not None:
 else:
     args.save = f"checkpoints/{args.model}"
 
+prefix = get_prefix(args.finetuning_mode)
 merge_name = getattr(args, "merge_func", "sum")
-results_file = Path(f"results/{args.model}-{merge_name}/metrics.json")
+results_file = Path(f"results/{args.model}-{merge_name}/{prefix}metrics.json")
 if results_file.exists() and not args.overwrite:
     print(f"Skipping: {results_file} already exists (use --overwrite to rerun)")
     exit(0)
 
 print("*" * 100)
-if args.finetuning_mode == "standard":
-    print(f"Evaluating non-linear FT models. ({args.merge_func})")
-    ft_accuracies_path = os.path.join(args.save, "ft_accuracies.json")
-elif args.finetuning_mode == "linear":
-    print(f"Evaluating linear FT models. ({args.merge_func})")
-    ft_accuracies_path = os.path.join(args.save, "linear_ft_accuracies.json")
-else:
-    print(f"Evaluating {args.finetuning_mode} models. ({args.merge_func})")
-    ft_accuracies_path = os.path.join(
-        args.save, f"{args.finetuning_mode}_ft_accuracies.json"
-    )
+print(f"Evaluating {args.finetuning_mode} FT models. ({args.merge_func})")
 print("*" * 100)
-
-with open(ft_accuracies_path) as f:
-    args.finetuning_accuracies = json.load(f)
-
-with open(os.path.join(args.save, "zeroshot_accuracies.json")) as f:
-    pretrained_accuracies = json.load(f)
 
 eval_datasets = list(T5_DATASETS)
 task_vectors = []
@@ -51,9 +37,9 @@ task_vectors = []
 for dataset in eval_datasets:
     checkpoint_dir = f"{args.save}/{dataset}"
     if args.finetuning_mode == "linear":
-        task_vectors.append(LanguageLinearizedTaskVector(checkpoint_dir=checkpoint_dir))
+        task_vectors.append(LanguageLinearizedTaskVector(checkpoint_dir=checkpoint_dir, prefix=prefix))
     else:
-        task_vectors.append(LanguageNonLinearTaskVector(checkpoint_dir=checkpoint_dir))
+        task_vectors.append(LanguageNonLinearTaskVector(checkpoint_dir=checkpoint_dir, prefix=prefix))
     print(f"Task vector {dataset} loaded")
 
 # Build HP grid

@@ -18,6 +18,7 @@ from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 
 from src.args import parse_arguments
+from src.utils import get_prefix
 from src.language.modeling import T5Wrapper
 from src.language.linearize import LinearizedT5Wrapper
 from src.language.datasets.pytorch_dataset import PytorchDataset
@@ -27,10 +28,9 @@ from src.language.eval import eval_single_dataset  # noqa: E402 (eval is a packa
 
 
 def finetune(args):
-    """Fine-tune a T5 model (standard or linearized) on a single dataset.
+    """Fine-tune a T5 model (standard, linearized, or LoRA) on a single dataset.
 
-    Saves ``zeroshot.pt`` / ``finetuned.pt`` (standard) or
-    ``linear_zeroshot.pt`` / ``linear_finetuned.pt`` (linear) inside
+    Saves ``zeroshot.pt`` and ``{prefix}finetuned.pt`` inside
     ``{args.save}/{args.train_dataset}/``.
     """
     train_dataset = args.train_dataset
@@ -49,15 +49,9 @@ def finetune(args):
     elif lora_finetuning:
         print("Using LoRA fine-tuning.")
 
-    if linearized_finetuning:
-        ft_path = os.path.join(ckpdir, "linear_finetuned.pt")
-        zs_path = os.path.join(ckpdir, "linear_zeroshot.pt")
-    elif lora_finetuning:
-        ft_path = os.path.join(ckpdir, "lora_finetuned.pt")
-        zs_path = os.path.join(ckpdir, "zeroshot.pt")
-    else:
-        ft_path = os.path.join(ckpdir, "finetuned.pt")
-        zs_path = os.path.join(ckpdir, "zeroshot.pt")
+    prefix = get_prefix(args.finetuning_mode)
+    ft_path = os.path.join(ckpdir, f"{prefix}finetuned.pt")
+    zs_path = os.path.join(ckpdir, "zeroshot.pt")
 
     if os.path.exists(zs_path) and os.path.exists(ft_path):
         print(f"Skipping fine-tuning because {ft_path} already exists.")

@@ -15,12 +15,14 @@ class _TaskVector(abc.ABC):
         lazy=False,
         cache_window=50,  # Keeps `cache_window` layers in memory at a time
         _transform_fn=None,
+        prefix="",
     ):
         """Initializes the task vector from a checkpoint directory or a pre-computed vector.
 
         When checkpoint_dir is provided, loads pretrained and finetuned checkpoints
-        from that directory using PRETRAINED_FILENAME and FINETUNED_FILENAME class
-        attributes. Also auto-discovers covariance.pt and fisher.pt in the directory.
+        from that directory. Pretrained is always PRETRAINED_FILENAME; finetuned
+        is {prefix}{FINETUNED_FILENAME} (e.g. "lora_finetuned.pt").
+        Also auto-discovers covariance.pt and fisher.pt in the directory.
 
         When vector is provided, uses the pre-computed task vector dict directly
         (used by arithmetic operations).
@@ -31,6 +33,7 @@ class _TaskVector(abc.ABC):
         self._cache = {}
         self._lazy_keys = None
         self._transform_fn = _transform_fn
+        self._prefix = prefix
 
         # Resolve checkpoint file paths from directory
         if checkpoint_dir is not None:
@@ -38,7 +41,7 @@ class _TaskVector(abc.ABC):
                 checkpoint_dir, self.PRETRAINED_FILENAME
             )
             self._finetuned_checkpoint = os.path.join(
-                checkpoint_dir, self.FINETUNED_FILENAME
+                checkpoint_dir, f"{prefix}{self.FINETUNED_FILENAME}"
             )
         else:
             self._pretrained_checkpoint = None
@@ -174,10 +177,11 @@ class _TaskVector(abc.ABC):
         raise NotImplementedError
 
     def _copy_metadata(self, result):
-        """Copy covariance/fisher paths and checkpoint_dir to a derived task vector."""
+        """Copy covariance/fisher paths, checkpoint_dir, and prefix to a derived task vector."""
         result.covariance_path = self.covariance_path
         result.fisher_path = self.fisher_path
         result.checkpoint_dir = self.checkpoint_dir
+        result._prefix = self._prefix
         return result
 
     def __add__(self, other):
@@ -269,6 +273,7 @@ class _TaskVector(abc.ABC):
                 checkpoint_dir=self.checkpoint_dir,
                 lazy=True,
                 _transform_fn=composed,
+                prefix=self._prefix,
             )
             return result
         with torch.no_grad():

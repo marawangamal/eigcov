@@ -31,9 +31,6 @@ class NonLinearTaskVector(_TaskVector):
 class LinearizedTaskVector(_TaskVector):
     """A task vector for linearized models."""
 
-    PRETRAINED_FILENAME = "linear_zeroshot.pt"
-    FINETUNED_FILENAME = "linear_finetuned.pt"
-
     def _load_checkpoint(self, checkpoint):
         """Load a checkpoint into a model."""
         return LinearizedImageEncoder.load(checkpoint)

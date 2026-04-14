@@ -29,9 +29,6 @@ class LanguageNonLinearTaskVector(_TaskVector):
 class LanguageLinearizedTaskVector(_TaskVector):
     """Task vector for linearized T5 models."""
 
-    PRETRAINED_FILENAME = "linear_zeroshot.pt"
-    FINETUNED_FILENAME = "linear_finetuned.pt"
-
     def _load_checkpoint(self, checkpoint):
         from src.language.linearize import LinearizedT5Wrapper
 

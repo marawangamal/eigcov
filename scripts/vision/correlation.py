@@ -22,6 +22,7 @@ from src.vision.task_vectors import LinearizedTaskVector, NonLinearTaskVector
 from src.vision.heads import get_classification_head
 from src.vision.modeling import ImageClassifier
 from src.args import parse_arguments
+from src.utils import get_prefix
 from src.vision.datasets.registry import get_dataset
 
 # K_SAMPLES = 32
@@ -131,6 +132,7 @@ if __name__ == "__main__":
     args = parse_arguments()
     args.batch_size = 1
     args.save = f"checkpoints/{args.model}"
+    prefix = get_prefix(args.finetuning_mode)
     args.num_samples = 100
     args.num_indices = 32
 
@@ -175,7 +177,7 @@ if __name__ == "__main__":
             param_names = [n for n, _ in nonlinear_encoder.named_parameters()]
             del nonlinear_encoder
 
-            tv = LinearizedTaskVector(checkpoint_dir=checkpoint_dir)
+            tv = LinearizedTaskVector(checkpoint_dir=checkpoint_dir, prefix=prefix)
             encoder = tv.apply_to_nonlinear(
                 checkpoint_dir, param_names, scaling_coef=1.0
             )
@@ -183,7 +185,7 @@ if __name__ == "__main__":
             # NOTE: LoRA mode not yet supported with checkpoint_dir convention
             raise NotImplementedError("LoRA mode not yet supported with checkpoint_dir convention")
         else:
-            tv = NonLinearTaskVector(checkpoint_dir=checkpoint_dir)
+            tv = NonLinearTaskVector(checkpoint_dir=checkpoint_dir, prefix=prefix)
             encoder = tv.apply_to(checkpoint_dir, scaling_coef=1.0)
 
         del tv

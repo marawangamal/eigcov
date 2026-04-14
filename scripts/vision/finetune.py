@@ -16,7 +16,7 @@ from src.vision.heads import get_classification_head
 from src.vision.linearize import LinearizedImageEncoder
 from src.vision.modeling import ImageClassifier, ImageEncoder, apply_lora, merge_lora
 from src.mhas import swap_mha, unswap_mha
-from src.utils import LabelSmoothing, cosine_lr
+from src.utils import LabelSmoothing, cosine_lr, get_prefix
 
 
 class GradCrossTermTracker:
@@ -286,15 +286,9 @@ def finetune(rank, args):
         print("Using LoRA fine-tuning.")
 
     # Check if checkpoints already exist
-    if lora_finetuning:
-        ft_path = os.path.join(args.save, train_dataset, "lora_finetuned.pt")
-        zs_path = os.path.join(args.save, train_dataset, "zeroshot.pt")
-    elif linearized_finetuning:
-        ft_path = os.path.join(args.save, train_dataset, "linear_finetuned.pt")
-        zs_path = os.path.join(args.save, train_dataset, "linear_zeroshot.pt")
-    else:
-        ft_path = os.path.join(args.save, train_dataset, "finetuned.pt")
-        zs_path = os.path.join(args.save, train_dataset, "zeroshot.pt")
+    prefix = get_prefix(args.finetuning_mode)
+    ft_path = os.path.join(ckpdir, f"{prefix}finetuned.pt")
+    zs_path = os.path.join(ckpdir, "zeroshot.pt")
     if os.path.exists(zs_path) and os.path.exists(ft_path) and not args.overwrite:
         print(f"Skipping fine-tuning because {ft_path} already exists.")
         cleanup_ddp()
@@ -341,12 +335,7 @@ def finetune(rank, args):
     # (LoRA zeroshot is already saved above, before LoRA is applied.)
     if args.save is not None and is_main_process() and not lora_finetuning:
         os.makedirs(ckpdir, exist_ok=True)
-        model_path = (
-            os.path.join(ckpdir, "linear_zeroshot.pt")
-            if linearized_finetuning
-            else os.path.join(ckpdir, "zeroshot.pt")
-        )
-        model.image_encoder.save(model_path)
+        model.image_encoder.save(os.path.join(ckpdir, "zeroshot.pt"))
 
     # Swap nn.MultiheadAttention -> MultiHeadAttentionSplit so forward hooks
     # fire on per-projection Linear layers (needed for grad cross-term tracking).
@@ -459,12 +448,7 @@ def finetune(rank, args):
                 and step % args.checkpoint_every == 0
                 and is_main_process()
             ):
-                if linearized_finetuning:
-                    model_path = os.path.join(ckpdir, f"linear_checkpoint_{step}.pt")
-                elif lora_finetuning:
-                    model_path = os.path.join(ckpdir, f"lora_checkpoint_{step}.pt")
-                else:
-                    model_path = os.path.join(ckpdir, f"checkpoint_{step}.pt")
+                model_path = os.path.join(ckpdir, f"{prefix}checkpoint_{step}.pt")
                 enc = ddp_model.module.image_encoder
                 if args.grad_cross_matrix:
                     enc = copy.deepcopy(enc).cpu()
@@ -507,15 +491,8 @@ def finetune(rank, args):
         eval_single_dataset(image_encoder, train_dataset, args)
 
     if args.save is not None and is_main_process():
-        if lora_finetuning:
-            zs_path = os.path.join(ckpdir, "zeroshot.pt")
-            ft_path = os.path.join(ckpdir, "lora_finetuned.pt")
-        elif linearized_finetuning:
-            zs_path = os.path.join(ckpdir, "linear_zeroshot.pt")
-            ft_path = os.path.join(ckpdir, "linear_finetuned.pt")
-        else:
-            zs_path = os.path.join(ckpdir, "zeroshot.pt")
-            ft_path = os.path.join(ckpdir, "finetuned.pt")
+        zs_path = os.path.join(ckpdir, "zeroshot.pt")
+        ft_path = os.path.join(ckpdir, f"{prefix}finetuned.pt")
         enc_to_save = image_encoder
         if args.grad_cross_matrix:
             enc_to_save = copy.deepcopy(image_encoder).cpu()
