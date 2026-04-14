@@ -15,10 +15,11 @@ from src.utils import get_prefix
 T5_DATASETS = ["qasc", "wiki_qa", "quartz", "paws", "story_cloze", "winogrande", "wsc"]
 
 args = parse_arguments()
-if args.seed is not None:
-    args.save = f"checkpoints_{args.seed}/{args.model}"
-else:
-    args.save = f"checkpoints/{args.model}"
+if args.save is None:
+    if args.seed is not None:
+        args.save = f"checkpoints_{args.seed}/{args.model}"
+    else:
+        args.save = f"checkpoints/{args.model}"
 
 prefix = get_prefix(args.finetuning_mode)
 merge_name = getattr(args, "merge_func", "sum")

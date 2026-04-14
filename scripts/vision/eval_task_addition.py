@@ -13,14 +13,15 @@ from src.vision.task_vectors import LinearizedTaskVector, NonLinearTaskVector
 
 args = parse_arguments()
 
-if args.seed is not None:
-    args.save = f"checkpoints_{args.seed}/{args.model}"
-else:
-    args.save = f"checkpoints/{args.model}"
+if args.save is None:
+    if args.seed is not None:
+        args.save = f"checkpoints_{args.seed}/{args.model}"
+    else:
+        args.save = f"checkpoints/{args.model}"
 
 prefix = get_prefix(args.finetuning_mode)
 merge_name = getattr(args, "merge_func", "sum")
-results_file = Path(f"results/{args.model}-{merge_name}/{prefix}metrics.json")
+results_file = Path(f"{args.results_dir}/{args.model}-{merge_name}/{prefix}metrics.json")
 if results_file.exists() and not args.overwrite:
     print(f"Skipping: {results_file} already exists (use --overwrite to rerun)")
     exit(0)

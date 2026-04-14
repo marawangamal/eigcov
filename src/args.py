@@ -216,6 +216,12 @@ def parse_arguments():
         help="Path to a JSON-lines results database file.",
     )
     parser.add_argument(
+        "--results-dir",
+        type=str,
+        default="results",
+        help="Base directory for results output.",
+    )
+    parser.add_argument(
         "--overwrite",
         action="store_true",
         default=False,
