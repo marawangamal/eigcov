@@ -12,7 +12,7 @@ set -euo pipefail
 mkdir -p logs
 
 # 0. Setup environment
-source "$SCRATCH/eigcov/.venv/bin/activate"
+source "$SCRATCH/eigcov/.venv-vl/bin/activate"
 export PYTHONPATH="$PYTHONPATH:$PWD"
 export SSL_CERT_DIR=/etc/ssl/certs
 

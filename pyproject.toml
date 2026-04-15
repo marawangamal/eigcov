@@ -23,9 +23,11 @@ vision-language = [
     "tqdm>=4.67.3",
     "transformers==4.57.6",
     "trl>=0.24.0",
+    "setuptools<81",
 ]
 olmo = [
     "ai2-olmes[gpu]",
+    "setuptools<81",
 ]
 
 [tool.uv]

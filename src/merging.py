@@ -322,6 +322,14 @@ def merge_eigcov(d: torch.Tensor, *args, **kwargs):
     return (d @ c).sum(dim=0) @ pinv(c.sum(dim=0))
 
 
+def merge_ace(d: torch.Tensor, *args, **kwargs):
+    T, Do, Di = d.shape
+    mu = d.sum(dim=1) * (1 / Do)
+    d_tilde = d - mu.unsqueeze(1)
+    c = d_tilde.transpose(1, 2) @ d_tilde
+    return (d @ c).sum(dim=0) @ pinv(c.sum(dim=0))
+
+
 def merge_eigcov_general(
     d: torch.Tensor,
     lam=0.0,
