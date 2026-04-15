@@ -23,7 +23,7 @@ if args.save is None:
 
 prefix = get_prefix(args.finetuning_mode)
 merge_name = getattr(args, "merge_func", "sum")
-results_file = Path(f"results/{args.model}-{merge_name}/{prefix}metrics.json")
+results_file = Path(f"{args.results_dir}/{args.model}-{merge_name}/{prefix}metrics.json")
 if results_file.exists() and not args.overwrite:
     print(f"Skipping: {results_file} already exists (use --overwrite to rerun)")
     exit(0)
@@ -32,7 +32,7 @@ print("*" * 100)
 print(f"Evaluating {args.finetuning_mode} FT models. ({args.merge_func})")
 print("*" * 100)
 
-eval_datasets = list(T5_DATASETS)
+eval_datasets = args.eval_datasets or list(T5_DATASETS)
 task_vectors = []
 
 for dataset in eval_datasets:

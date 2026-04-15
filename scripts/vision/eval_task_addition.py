@@ -30,7 +30,7 @@ print("*" * 100)
 print(f"Evaluating {args.finetuning_mode} FT models. ({args.merge_func})")
 print("*" * 100)
 
-eval_datasets = [
+eval_datasets = args.eval_datasets or [
     "SUN397",
     "Cars",
     "DTD",
