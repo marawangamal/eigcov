@@ -22,10 +22,10 @@ class ImageEncoder(torch.nn.Module):
             self.train_preprocess,
             self.val_preprocess,
         ) = open_clip.create_model_and_transforms(
-            name, pretrained=pretrained, cache_dir=args.openclip_cachedir
+            name, pretrained=pretrained, cache_dir=args.cache_dir
         )
 
-        self.cache_dir = args.cache_dir
+        self.cache_dir = args.feature_cache_dir
 
         if not keep_lang and hasattr(self.model, "transformer"):
             delattr(self.model, "transformer")
@@ -54,7 +54,7 @@ class ImageEncoder(torch.nn.Module):
             self.train_preprocess,
             self.val_preprocess,
         ) = open_clip.create_model_and_transforms(
-            name, pretrained=pretrained, cache_dir=args.openclip_cachedir
+            name, pretrained=pretrained, cache_dir=args.cache_dir
         )
         self.model.load_from_state_dict(state_dict)
 

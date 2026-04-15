@@ -16,6 +16,7 @@ from src.vision.task_vectors import NonLinearTaskVector
 from src.vision.heads import get_classification_head
 from src.vision.modeling import ImageClassifier
 from src.args import parse_arguments
+from src.utils import get_prefix
 from src.vision.datasets.registry import get_dataset
 
 
@@ -102,6 +103,7 @@ if __name__ == "__main__":
     # of ||dL/dy||² over samples
     args.batch_size = 1
     args.save = f"checkpoints/{args.model}"
+    prefix = get_prefix(args.finetuning_mode)
 
     model = args.model
     results_dir = f"results/{model}"
@@ -127,7 +129,7 @@ if __name__ == "__main__":
 
         print(f"\nComputing gradient magnitudes for {ds}")
         checkpoint_dir = f"checkpoints/{model}/{ds}Val"
-        tv = NonLinearTaskVector(checkpoint_dir=checkpoint_dir)
+        tv = NonLinearTaskVector(checkpoint_dir=checkpoint_dir, prefix=prefix)
         encoder = tv.apply_to(checkpoint_dir, scaling_coef=1.0)
         del tv
 

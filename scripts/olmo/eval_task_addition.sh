@@ -15,11 +15,6 @@ export SSL_CERT_DIR=/etc/ssl/certs
 # ── CONFIG ────────────────────────────────────────────────────────────────────
 MODEL="Olmo-3-7b"
 METHODS=(eigcov tsv mean isoc)
-TASK_DIRS=(
-  "checkpoints/${MODEL}/Math"
-  "checkpoints/${MODEL}/Code"
-  "checkpoints/${MODEL}/IF"
-)
 
 # ── OLMES ─────────────────────────────────────────────────────────────────────
 OLMES_TASKS=(
@@ -30,8 +25,8 @@ OLMES_TASKS=(
   "aime:zs_cot_r1::pass_at_32_2025_deepseek"
 )
 OLMES_MODEL_ARGS='{"gpu_memory_utilization": 0.8, "trust_remote_code": false, "max_length": 16384}'
-GPUS=2
-BATCH_SIZE=8
+GPUS=4
+BATCH_SIZE=64
 NUM_WORKERS=1
 
 # ── Merge + Evaluate ────────────────────────────────────────────────────────
@@ -50,7 +45,7 @@ for method in "${METHODS[@]}"; do
     echo ">>> Skipping merge: ${MERGED_DIR} already exists"
   else
     python scripts/olmo/merge.py \
-      --task-dirs "${TASK_DIRS[@]}" \
+      --save "checkpoints/${MODEL}" \
       --merge-func "$method" \
       --output-dir "$MERGED_DIR"
   fi
@@ -60,6 +55,7 @@ for method in "${METHODS[@]}"; do
     echo ">>> Skipping eval: ${RESULTS_DIR} already has results"
   else
     echo ">>> Evaluating: Batch size = $BATCH_SIZE, Number of workers = $NUM_WORKERS, GPUs = $GPUS"
+    echo ">>> Model: $MERGED_DIR, tasks: ${OLMES_TASKS[@]}"
     olmes \
       --model "$MERGED_DIR" \
       --task "${OLMES_TASKS[@]}" \

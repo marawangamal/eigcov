@@ -20,7 +20,7 @@ export SSL_CERT_DIR=/etc/ssl/certs
 
 # ===== Default experiments (no hyperparameter tuning) =====
 MODELS=(t5-base t5-large)
-METHODS=(difisher_v2)
+METHODS=(isoc3)
 FT_MODE=standard
 HPO=""
 

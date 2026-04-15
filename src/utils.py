@@ -5,6 +5,10 @@ import numpy as np
 import torch
 
 
+def get_prefix(finetuning_mode):
+    return {"linear": "linear_", "lora": "lora_"}.get(finetuning_mode, "")
+
+
 def assign_learning_rate(param_group, new_lr):
     param_group["lr"] = new_lr
 

@@ -16,6 +16,7 @@ from collections import OrderedDict
 
 from src.vision.task_vectors import NonLinearTaskVector
 from src.args import parse_arguments
+from src.utils import get_prefix
 from src.vision.datasets.registry import get_dataset
 
 
@@ -152,7 +153,7 @@ def compute_interference(
     print("  Building merged task vector...")
     merged_vector = None
     for t in range(T):
-        tv = NonLinearTaskVector(checkpoint_dir=checkpoint_dirs[t])
+        tv = NonLinearTaskVector(checkpoint_dir=checkpoint_dirs[t], prefix=prefix)
         merged_vector = tv if merged_vector is None else merged_vector + tv
         print(f"    Added task vector {t + 1}/{T}: {dataset_names[t]}")
 
@@ -164,7 +165,7 @@ def compute_interference(
     for t in range(T):
         print(f"  Computing interference for task {t + 1}/{T}: {dataset_names[t]}")
 
-        tv_t = NonLinearTaskVector(checkpoint_dir=checkpoint_dirs[t])
+        tv_t = NonLinearTaskVector(checkpoint_dir=checkpoint_dirs[t], prefix=prefix)
         single_encoder = tv_t.apply_to(checkpoint_dirs[t], scaling_coef=alpha)
         del tv_t
 
@@ -189,6 +190,7 @@ if __name__ == "__main__":
     args = parse_arguments()
     args.batch_size = 64 if args.model == "ViT-L-14" else 128
     args.save = f"checkpoints/{args.model}"
+    prefix = get_prefix(args.finetuning_mode)
 
     model = args.model
     results_dir = f"results/{model}"

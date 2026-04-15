@@ -14,7 +14,7 @@ python -c "from src.language.eval import eval_single_dataset, evaluate_task_vect
 python -c "from src.language.eval.evaluator import Evaluator; print('OK: Evaluator')"
 python -c "from src.language.eval.scorer import Scorer; print('OK: Scorer')"
 python -c "from scripts.language.finetune import finetune; print('OK: finetune')"
-python -c "from src.language.args import parse_arguments; print('OK: args')"
+python -c "from src.args import parse_arguments; print('OK: args')"
 python -c "from src.language.utils import find_optimal_coef, DotDict; print('OK: utils')"
 
 echo ""

@@ -18,7 +18,6 @@ Usage:
     python scripts/rl/finetune.py --capability all --hf-cache-dir $SCRATCH/huggingface
 """
 
-import argparse
 import os
 
 import numpy as np
@@ -28,6 +27,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from trl import SFTTrainer, SFTConfig
 from peft import LoraConfig
 
+from src.args import parse_arguments
 from src.covariance import register_hooks
 
 PRETRAINED_MODEL = "allenai/Olmo-3-1025-7B"
@@ -35,69 +35,17 @@ MAX_SEQ_LEN = 4096
 
 # Each capability maps to its own HuggingFace dataset
 CAPABILITY_DATASETS = {
-    "math": "allenai/Dolci-RL-Zero-Math-7B",
-    "code": "allenai/Dolci-RL-Zero-Code-7B",
-    "if": "allenai/Dolci-RL-Zero-IF-7B",
+    "Math": "allenai/Dolci-RL-Zero-Math-7B",
+    "Code": "allenai/Dolci-RL-Zero-Code-7B",
+    "IF": "allenai/Dolci-RL-Zero-IF-7B",
 }
 
 # Column used as the assistant response for each capability
 ANSWER_COLUMN = {
-    "math": "ground_truth",
-    "code": "solution",
-    "if": "ground_truth",
+    "Math": "ground_truth",
+    "Code": "solution",
+    "IF": "ground_truth",
 }
-
-
-def parse_args():
-    p = argparse.ArgumentParser(
-        description="Fine-tune Olmo-3-7B on Dolci RL-Zero capability datasets"
-    )
-    p.add_argument(
-        "--capability",
-        type=str,
-        required=True,
-        choices=list(CAPABILITY_DATASETS.keys()) + ["all"],
-    )
-    p.add_argument("--output-dir", type=str, default="checkpoints/rl")
-    p.add_argument("--num-epochs", type=int, default=1)
-    p.add_argument("--batch-size", type=int, default=2)
-    p.add_argument("--grad-accum", type=int, default=32)
-    p.add_argument("--lr", type=float, default=0)
-    p.add_argument("--warmup-ratio", type=float, default=0.03)
-    p.add_argument("--use-lora", action="store_true")
-    p.add_argument("--lora-r", type=int, default=64)
-    p.add_argument("--lora-alpha", type=int, default=16)
-    p.add_argument("--hf-cache-dir", type=str, default=None)
-    p.add_argument("--bf16", action="store_true", default=True)
-    p.add_argument(
-        "--save-strategy", type=str, default="epoch", choices=["epoch", "steps", "no"]
-    )
-    p.add_argument("--save-steps", type=int, default=100)
-    p.add_argument(
-        "--fsdp",
-        action="store_true",
-        help="Enable FSDP full sharding (required for full fine-tune on multi-GPU)",
-    )
-    p.add_argument(
-        "--resume",
-        action="store_true",
-        help="Resume training from latest checkpoint in output dir",
-    )
-    p.add_argument(
-        "--cov-type",
-        type=str,
-        default="sm",
-        choices=["sm", "cov"],
-        help="Covariance mode: 'sm' for second moment, 'cov' for centered covariance",
-    )
-    p.add_argument(
-        "--cov-estimator",
-        type=str,
-        default="avg",
-        choices=["avg", "sampled", "full"],
-        help="How to sample activations: 'avg' per-token, 'sampled' one random token, 'full' DxT",
-    )
-    return p.parse_args()
 
 
 def _prepare_messages(ds, capability):
@@ -130,18 +78,18 @@ def train_capability(capability, args):
     print(f"Training capability: {capability}")
     print(f"{'='*60}")
 
-    run_dir = os.path.join(args.output_dir, f"Olmo-3-7B-{capability}")
+    run_dir = os.path.join(args.save, capability)
     if os.path.isdir(run_dir) and os.listdir(run_dir) and not args.resume:
         print(f"  Skipping {capability} — {run_dir} already exists")
         return
 
-    if args.hf_cache_dir:
-        os.environ["HF_HOME"] = args.hf_cache_dir
+    if args.cache_dir:
+        os.environ["HF_HOME"] = args.cache_dir
 
     # Load dataset
     dataset_id = CAPABILITY_DATASETS[capability]
     print(f"  Dataset: {dataset_id}")
-    ds = load_dataset(dataset_id, split="train", cache_dir=args.hf_cache_dir)
+    ds = load_dataset(dataset_id, split="train", cache_dir=args.cache_dir)
     ds = _prepare_messages(ds, capability)
     print(f"  {len(ds)} examples")
 
@@ -151,7 +99,7 @@ def train_capability(capability, args):
 
     # Load tokenizer from base model (already has pad_token and ChatML tokens)
     tokenizer = AutoTokenizer.from_pretrained(
-        PRETRAINED_MODEL, cache_dir=args.hf_cache_dir
+        PRETRAINED_MODEL, cache_dir=args.cache_dir
     )
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -159,8 +107,8 @@ def train_capability(capability, args):
     print("Loading model ...")
     model = AutoModelForCausalLM.from_pretrained(
         PRETRAINED_MODEL,
-        torch_dtype=torch.bfloat16 if args.bf16 else torch.float32,
-        cache_dir=args.hf_cache_dir,
+        torch_dtype=torch.bfloat16,
+        cache_dir=args.cache_dir,
     )
 
     # Register forward hooks to collect activation covariances
@@ -180,13 +128,13 @@ def train_capability(capability, args):
     sft_config = SFTConfig(
         output_dir=run_dir,
         max_length=MAX_SEQ_LEN,
-        num_train_epochs=args.num_epochs,
+        num_train_epochs=args.epochs,
         per_device_train_batch_size=args.batch_size,
-        gradient_accumulation_steps=args.grad_accum,
+        gradient_accumulation_steps=args.num_grad_accumulation,
         learning_rate=args.lr,
         warmup_ratio=args.warmup_ratio,
         lr_scheduler_type="linear",
-        bf16=args.bf16,
+        bf16=True,
         logging_steps=10,
         save_strategy="no",
         report_to="none",
@@ -197,20 +145,12 @@ def train_capability(capability, args):
     )
 
     peft_config = None
-    if args.use_lora:
+    if args.finetuning_mode == "lora":
         peft_config = LoraConfig(
-            r=args.lora_r,
+            r=args.lora_rank,
             lora_alpha=args.lora_alpha,
-            target_modules=[
-                "q_proj",
-                "k_proj",
-                "v_proj",
-                "o_proj",
-                "gate_proj",
-                "up_proj",
-                "down_proj",
-            ],
-            lora_dropout=0.05,
+            target_modules="all-linear",
+            lora_dropout=args.lora_dropout,
             task_type="CAUSAL_LM",
         )
 
@@ -241,7 +181,9 @@ def train_capability(capability, args):
 
 
 def main():
-    args = parse_args()
+    args = parse_arguments()
+    if args.save is None:
+        args.save = "checkpoints/Olmo-3-7b"
 
     if args.capability == "all":
         for cap in CAPABILITY_DATASETS:

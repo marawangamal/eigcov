@@ -29,6 +29,7 @@ from src.vision.modeling import ImageClassifier
 from src.args import parse_arguments
 from src.vision.datasets.registry import get_dataset
 from src import mhap, mhas
+from src.utils import get_prefix
 
 
 def compute_fisher(encoder, dataset_name, args, on_end=None):
@@ -89,6 +90,7 @@ def compute_fisher(encoder, dataset_name, args, on_end=None):
 if __name__ == "__main__":
     args = parse_arguments()
     args.save = f"checkpoints/{args.model}"
+    prefix = get_prefix(args.finetuning_mode)
     args.model_device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     args.cov_batch_size = 1
     args.cov_num_batches = [100]
@@ -121,12 +123,12 @@ if __name__ == "__main__":
             )
             param_names = [n for n, _ in nonlinear_encoder.named_parameters()]
             del nonlinear_encoder
-            tv = LinearizedTaskVector(checkpoint_dir=checkpoint_dir_path)
+            tv = LinearizedTaskVector(checkpoint_dir=checkpoint_dir_path, prefix=prefix)
             encoder = tv.apply_to_nonlinear(
                 checkpoint_dir_path, param_names, scaling_coef=1.0
             )
         else:
-            tv = NonLinearTaskVector(checkpoint_dir=checkpoint_dir)
+            tv = NonLinearTaskVector(checkpoint_dir=checkpoint_dir, prefix=prefix)
             encoder = tv.apply_to(checkpoint_dir, scaling_coef=1.0)
 
         del tv

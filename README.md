@@ -26,6 +26,9 @@ export PYTHONPATH="$PYTHONPATH:$(pwd)" # Add src to python path
 export HF_HOME=$SCRATCH/huggingface
 # python -c "import nltk; nltk.download('punkt', download_dir='$SCRATCH/nltk_data')"
 export NLTK_DATA=$SCRATCH/nltk_data
+# TamIA: 
+# export HF_HUB_DISABLE_HF_TRANSFER=1
+# module load cuda/12.6 arrow python/3.11 httpproxy
 ```
 
 ## Vision Experiments (ViT-B-16 / ViT-B-32 / ViT-L-14)

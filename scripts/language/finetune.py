@@ -17,7 +17,8 @@ def _format_duration(seconds: float) -> str:
 from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 
-from src.language.args import parse_arguments
+from src.args import parse_arguments
+from src.utils import get_prefix
 from src.language.modeling import T5Wrapper
 from src.language.linearize import LinearizedT5Wrapper
 from src.language.datasets.pytorch_dataset import PytorchDataset
@@ -27,10 +28,9 @@ from src.language.eval import eval_single_dataset  # noqa: E402 (eval is a packa
 
 
 def finetune(args):
-    """Fine-tune a T5 model (standard or linearized) on a single dataset.
+    """Fine-tune a T5 model (standard, linearized, or LoRA) on a single dataset.
 
-    Saves ``zeroshot.pt`` / ``finetuned.pt`` (standard) or
-    ``linear_zeroshot.pt`` / ``linear_finetuned.pt`` (linear) inside
+    Saves ``zeroshot.pt`` and ``{prefix}finetuned.pt`` inside
     ``{args.save}/{args.train_dataset}/``.
     """
     train_dataset = args.train_dataset
@@ -49,15 +49,9 @@ def finetune(args):
     elif lora_finetuning:
         print("Using LoRA fine-tuning.")
 
-    if linearized_finetuning:
-        ft_path = os.path.join(ckpdir, "linear_finetuned.pt")
-        zs_path = os.path.join(ckpdir, "linear_zeroshot.pt")
-    elif lora_finetuning:
-        ft_path = os.path.join(ckpdir, "lora_finetuned.pt")
-        zs_path = os.path.join(ckpdir, "zeroshot.pt")
-    else:
-        ft_path = os.path.join(ckpdir, "finetuned.pt")
-        zs_path = os.path.join(ckpdir, "zeroshot.pt")
+    prefix = get_prefix(args.finetuning_mode)
+    ft_path = os.path.join(ckpdir, f"{prefix}finetuned.pt")
+    zs_path = os.path.join(ckpdir, "zeroshot.pt")
 
     if os.path.exists(zs_path) and os.path.exists(ft_path):
         print(f"Skipping fine-tuning because {ft_path} already exists.")
@@ -83,17 +77,11 @@ def finetune(args):
     if lora_finetuning:
         from peft import LoraConfig, get_peft_model
 
-        # "all-linear" is a PEFT special string and must NOT be split into a list
-        target_modules = (
-            args.lora_target_modules
-            if args.lora_target_modules == "all-linear"
-            else args.lora_target_modules.split(",")
-        )
         lora_config = LoraConfig(
             r=args.lora_rank,
             lora_alpha=args.lora_alpha,
             lora_dropout=args.lora_dropout,
-            target_modules=target_modules,
+            target_modules="all-linear",
         )
         model.transformer = get_peft_model(model.transformer, lora_config)
         model.transformer.print_trainable_parameters()
@@ -125,7 +113,7 @@ def finetune(args):
     if lora_finetuning:
         print(
             f"  rank: {args.lora_rank}, alpha: {args.lora_alpha}, "
-            f"dropout: {args.lora_dropout}, modules: {args.lora_target_modules}"
+            f"dropout: {args.lora_dropout}, modules: all-linear"
         )
     scaler = torch.amp.GradScaler("cuda")
 
@@ -171,7 +159,7 @@ def finetune(args):
             )
         if (
             step > 0
-            and (i + 1) % (args.checkpoint_frequency * num_grad_accumulation) == 0
+            and (i + 1) % (args.checkpoint_every * num_grad_accumulation) == 0
         ):
             val_acc = eval_single_dataset(
                 "validation", model, tokenizer, train_dataset, args
@@ -226,7 +214,7 @@ if __name__ == "__main__":
     args.batch_size = _bs
     args.num_grad_accumulation = _ga
     args.num_batches = 75000
-    args.checkpoint_frequency = 100
+    args.checkpoint_every = 100
     args.print_every = 10
     args.patience = 5
 

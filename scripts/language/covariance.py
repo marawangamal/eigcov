@@ -21,7 +21,7 @@ from transformers import AutoTokenizer
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.language.args import parse_arguments
+from src.args import parse_arguments
 from src.language.task_vectors import (
     LanguageNonLinearTaskVector,
     LanguageLinearizedTaskVector,
@@ -30,6 +30,7 @@ from src.language.datasets.pytorch_dataset import PytorchDataset
 from src.language.datasets.batcher import Batcher
 from src.language.datasets.dataset_readers import get_datasetReader
 from src.covariance import OnlineCovariance, register_hooks
+from src.utils import get_prefix
 
 
 def compute_covs(model, dataset_name, args, on_end=None):
@@ -111,6 +112,7 @@ if __name__ == "__main__":
 
     if args.save is None:
         args.save = f"checkpoints/{args.model}"
+    prefix = get_prefix(args.finetuning_mode)
 
     # Set cov_num_batches to the max for compute_covs
     args.cov_num_batches = max(args.cov_num_batches)
@@ -142,12 +144,12 @@ if __name__ == "__main__":
             param_names = [n for n, _ in nonlinear_model.named_parameters()]
             del nonlinear_model
 
-            tv = LanguageLinearizedTaskVector(checkpoint_dir=checkpoint_dir)
+            tv = LanguageLinearizedTaskVector(checkpoint_dir=checkpoint_dir, prefix=prefix)
             model = tv.apply_to_nonlinear(
                 checkpoint_dir, param_names, scaling_coef=1.0
             )
         else:
-            tv = LanguageNonLinearTaskVector(checkpoint_dir=checkpoint_dir)
+            tv = LanguageNonLinearTaskVector(checkpoint_dir=checkpoint_dir, prefix=prefix)
             model = tv.apply_to_nonlinear(checkpoint_dir, scaling_coef=1.0)
 
         del tv

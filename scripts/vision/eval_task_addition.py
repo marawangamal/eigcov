@@ -8,17 +8,20 @@ from src import mhap, mhas
 from src.args import parse_arguments
 from src.vision.eval import evaluate_task_vector_at_coef
 from src.merging import combine_task_vectors
+from src.utils import get_prefix
 from src.vision.task_vectors import LinearizedTaskVector, NonLinearTaskVector
 
 args = parse_arguments()
 
-if args.seed is not None:
-    args.save = f"checkpoints_{args.seed}/{args.model}"
-else:
-    args.save = f"checkpoints/{args.model}"
+if args.save is None:
+    if args.seed is not None:
+        args.save = f"checkpoints_{args.seed}/{args.model}"
+    else:
+        args.save = f"checkpoints/{args.model}"
 
+prefix = get_prefix(args.finetuning_mode)
 merge_name = getattr(args, "merge_func", "sum")
-results_file = Path(f"results/{args.model}-{merge_name}/metrics.json")
+results_file = Path(f"{args.results_dir}/{args.model}-{merge_name}/{prefix}metrics.json")
 if results_file.exists() and not args.overwrite:
     print(f"Skipping: {results_file} already exists (use --overwrite to rerun)")
     exit(0)
@@ -27,7 +30,7 @@ print("*" * 100)
 print(f"Evaluating {args.finetuning_mode} FT models. ({args.merge_func})")
 print("*" * 100)
 
-eval_datasets = [
+eval_datasets = args.eval_datasets or [
     "SUN397",
     "Cars",
     "DTD",
@@ -43,9 +46,9 @@ task_vectors = []
 for dataset in eval_datasets:
     checkpoint_dir = f"{args.save}/{dataset}Val"
     if args.finetuning_mode == "linear":
-        task_vectors.append(LinearizedTaskVector(checkpoint_dir=checkpoint_dir))
+        task_vectors.append(LinearizedTaskVector(checkpoint_dir=checkpoint_dir, prefix=prefix))
     else:
-        task_vectors.append(NonLinearTaskVector(checkpoint_dir=checkpoint_dir))
+        task_vectors.append(NonLinearTaskVector(checkpoint_dir=checkpoint_dir, prefix=prefix))
     print(f"Task vector {dataset} loaded")
 
 # For use with RegMean and Projected RegMean.
@@ -101,7 +104,7 @@ best_val_score = -float("inf")
 best_merge_kwargs = {}
 best_val_metrics = {}
 
-_set_eval_split(args.eval_val_split)
+_set_eval_split("val")
 args.eval_max_batches = getattr(args, "eval_val_max_batches", None)
 print("=" * 100)
 if len(hp_combos) <= 1:
@@ -109,7 +112,7 @@ if len(hp_combos) <= 1:
     print(f"PHASE 1: SKIPPED (single HP combo: {best_merge_kwargs})")
 else:
     print(
-        f"PHASE 1: SPLIT={args.eval_val_split.upper()} — grid search over {len(hp_combos)} HP combos"
+        f"PHASE 1: SPLIT=VAL — grid search over {len(hp_combos)} HP combos"
         + (f" (max {args.eval_max_batches} batches)" if args.eval_max_batches else "")
     )
     print("=" * 100)
@@ -132,11 +135,11 @@ else:
 
 print(f"Best merge HP (from phase 1): {best_merge_kwargs}")
 
-# Phase 2: evaluate at best HP combo on eval-test-split (use all batches).
-_set_eval_split(args.eval_test_split)
+# Phase 2: evaluate at best HP combo on the test split (use all batches).
+_set_eval_split("test")
 args.eval_max_batches = None
 print("=" * 100)
-print(f"PHASE 2: SPLIT={args.eval_test_split.upper()} — evaluating at best HP combo")
+print("PHASE 2: SPLIT=TEST — evaluating at best HP combo")
 print("=" * 100)
 task_vector = _merge_and_remap(best_merge_kwargs)
 test_metrics = evaluate_task_vector_at_coef(

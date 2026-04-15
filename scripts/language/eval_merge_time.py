@@ -3,13 +3,14 @@ import json
 import os
 import time
 
-from src.language.args import parse_arguments
+from src.args import parse_arguments
 from src.language.task_vectors import (
     LanguageLinearizedTaskVector,
     LanguageNonLinearTaskVector,
 )
 from src.merging import combine_task_vectors
 from src.results_db import append_result, args_to_dict, make_run_hash, record_exists
+from src.utils import get_prefix
 
 T5_DATASETS = ["qasc", "wiki_qa", "quartz", "paws", "story_cloze", "winogrande", "wsc"]
 
@@ -18,6 +19,7 @@ if args.seed is not None:
     args.save = f"checkpoints_{args.seed}/{args.model}"
 else:
     args.save = f"checkpoints/{args.model}"
+prefix = get_prefix(args.finetuning_mode)
 
 _HASH_IGNORE = {
     # training-only
@@ -32,12 +34,10 @@ _HASH_IGNORE = {
     "keep_checkpoints",
     "port",
     "world_size",
-    "cosine_samples",
     "lora_rank",
     "lora_alpha",
     "lora_dropout",
     "lora_target_modules",
-    "lora_target_parameters",
     # environment / paths
     "hf_cache_dir",
     "cache_dir",
@@ -51,7 +51,6 @@ _HASH_IGNORE = {
     "eval_max_batches",
     # metadata
     "results_db",
-    "exp_name",
     "overwrite",
     "num_workers",
     "device",
@@ -84,11 +83,11 @@ for dataset in eval_datasets:
     checkpoint_dir = f"{args.save}/{dataset}"
     if args.finetuning_mode == "linear":
         task_vectors.append(
-            LanguageLinearizedTaskVector(checkpoint_dir=checkpoint_dir)
+            LanguageLinearizedTaskVector(checkpoint_dir=checkpoint_dir, prefix=prefix)
         )
     else:
         task_vectors.append(
-            LanguageNonLinearTaskVector(checkpoint_dir=checkpoint_dir)
+            LanguageNonLinearTaskVector(checkpoint_dir=checkpoint_dir, prefix=prefix)
         )
     print(f"Task vector {dataset} loaded")
 
